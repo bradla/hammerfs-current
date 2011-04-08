@@ -4,3 +4,5 @@ This is not for production systems and only use it if you know
 what you are doing. 
 
 I don't have all the userland finished porting yet maybe Friday.
+
+The file should compile clean for the most part the other left the way they are for a reason
