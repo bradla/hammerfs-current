@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2008 The DragonFly Project.  All rights reserved.
- * 
+ *
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,8 +30,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
- * $DragonFly: src/sys/vfs/hammer/hammer_flusher.c,v 1.45 2008/07/31 04:42:04 dillon Exp $
+ *
+ * $DragonFly: src/sys/vfs/hammer/hammer_flusher.c,
+ * v 1.45 2008/07/31 04:42:04 dillon Exp $
  */
 /*
  * HAMMER dependancy flusher thread
@@ -49,7 +50,7 @@ static void hammer_flusher_flush_inode(hammer_inode_t ip,
 					hammer_transaction_t trans);
 
 RB_GENERATE(hammer_fls_rb_tree, hammer_inode, rb_flsnode,
-              hammer_ino_rb_compare);
+	hammer_ino_rb_compare);
 
 /*
  * Inodes are sorted and assigned to slave threads in groups of 128.
@@ -72,8 +73,6 @@ struct hammer_flusher_info {
 	hammer_flush_group_t flg;
 	hammer_inode_t	work_array[HAMMER_FLUSH_GROUP_SIZE];
 };
-
-typedef struct hammer_flusher_info *hammer_flusher_info_t;
 
 /*
  * Sync all inodes pending on the flusher.
@@ -114,7 +113,7 @@ hammer_flusher_async(hammer_mount_t hmp, hammer_flush_group_t close_flg)
 	} else {
 		seq = hmp->flusher.done;
 	}
-	return(seq);
+	return seq;
 }
 
 int
@@ -129,7 +128,7 @@ hammer_flusher_async_one(hammer_mount_t hmp)
 	} else {
 		seq = hmp->flusher.done;
 	}
-	return(seq);
+	return seq;
 }
 
 /*
@@ -160,7 +159,7 @@ hammer_flusher_wait_next(hammer_mount_t hmp)
 void
 hammer_flusher_create(hammer_mount_t hmp)
 {
-	hammer_flusher_info_t info;
+	struct hammer_flusher_info *info;
 	int i;
 
 	hmp->flusher.signal = 0;
@@ -185,7 +184,7 @@ hammer_flusher_create(hammer_mount_t hmp)
 void
 hammer_flusher_destroy(hammer_mount_t hmp)
 {
-	hammer_flusher_info_t info;
+	struct hammer_flusher_info *info;
 
 	/*
 	 * Kill the master
@@ -231,7 +230,9 @@ hammer_flusher_master_thread(void *arg)
 		 */
 		for (;;) {
 			while (hmp->flusher.group_lock)
-				tsleep(&hmp->flusher.group_lock, 0, "hmrhld", 0);
+				tsleep(&hmp->flusher.group_lock,
+				0,
+				"hmrhld", 0);
 			hmp->flusher.act = hmp->flusher.next;
 			++hmp->flusher.next;
 			hammer_flusher_clean_loose_ios(hmp);
@@ -275,7 +276,7 @@ hammer_flusher_master_thread(void *arg)
 static void
 hammer_flusher_flush(hammer_mount_t hmp)
 {
-	hammer_flusher_info_t info;
+	struct hammer_flusher_info *info;
 	hammer_flush_group_t flg;
 	hammer_reserve_t resv;
 	hammer_inode_t ip;
@@ -359,9 +360,8 @@ hammer_flusher_flush(hammer_mount_t hmp)
 			 * Get a new slave.  We may have to wait for one to
 			 * finish running.
 			 */
-			while ((info = TAILQ_FIRST(&hmp->flusher.ready_list)) == NULL) {
+			while ((info = TAILQ_FIRST(&hmp->flusher.ready_list)) == NULL)
 				tsleep(&hmp->flusher.ready_list, 0, "hmrfcc", 0);
-			}
 		}
 
 		/*
@@ -413,7 +413,7 @@ hammer_flusher_flush(hammer_mount_t hmp)
 	}
 
 	/*
-	 * Clean up any freed big-blocks (typically zone-2). 
+	 * Clean up any freed big-blocks (typically zone-2).
 	 * resv->flush_group is typically set several flush groups ahead
 	 * of the free to ensure that the freed block is not reused until
 	 * it can no longer be reused.
@@ -434,7 +434,7 @@ static void
 hammer_flusher_slave_thread(void *arg)
 {
 	hammer_flush_group_t flg;
-	hammer_flusher_info_t info;
+	struct hammer_flusher_info *info;
 	hammer_mount_t hmp;
 	hammer_inode_t ip;
 	int i;
@@ -478,7 +478,8 @@ hammer_flusher_clean_loose_ios(hammer_mount_t hmp)
 	 *
 	 * The io_token is needed to protect the list.
 	 */
-	if ((io = TAILQ_FIRST(&hmp->lose_list)) != NULL) {
+	if (TAILQ_FIRST(&hmp->lose_list) != NULL) {
+		io = TAILQ_FIRST(&hmp->lose_list);
 		crit_enter();	/* biodone() race */
 		while ((io = TAILQ_FIRST(&hmp->lose_list)) != NULL) {
 			KKASSERT(io->mod_list == &hmp->lose_list);
@@ -552,9 +553,9 @@ hammer_flusher_undo_exhausted(hammer_transaction_t trans, int quarter)
 {
 	if (hammer_undo_space(trans) <
 	    hammer_undo_max(trans->hmp) * quarter / 4) {
-		return(1);
+		return 1;
 	} else {
-		return(0);
+		return 0;
 	}
 }
 
@@ -880,9 +881,9 @@ hammer_flusher_meta_limit(hammer_mount_t hmp)
 {
 	if (hmp->locked_dirty_space + hmp->io_running_space >
 	    hammer_limit_dirtybufspace) {
-		return(1);
+		return 1;
 	}
-	return(0);
+	return 0;
 }
 
 /*
@@ -896,9 +897,9 @@ hammer_flusher_meta_halflimit(hammer_mount_t hmp)
 {
 	if (hmp->locked_dirty_space + hmp->io_running_space >
 	    hammer_limit_dirtybufspace / 2) {
-		return(1);
+		return 1;
 	}
-	return(0);
+	return 0;
 }
 
 /*
@@ -906,12 +907,12 @@ hammer_flusher_meta_halflimit(hammer_mount_t hmp)
  */
 int
 hammer_flusher_haswork(hammer_mount_t hmp)
-{	
-        if (hmp->ronly)
-		return(0);
+{
+	if (hmp->ronly)
+		return 0;
 
 	if (hmp->flags & HAMMER_MOUNT_CRITICAL_ERROR)
-		return(0);
+		return 0;
 	if (TAILQ_FIRST(&hmp->flush_group_list) ||	/* dirty inodes */
 	    TAILQ_FIRST(&hmp->volu_list) ||		/* dirty bufffers */
 	    TAILQ_FIRST(&hmp->undo_list) ||
@@ -919,8 +920,7 @@ hammer_flusher_haswork(hammer_mount_t hmp)
 	    TAILQ_FIRST(&hmp->meta_list) ||
 	    (hmp->hflags & HMNT_UNDO_DIRTY)		/* UNDO FIFO sync */
 	) {
-		return(1);
+		return 1;
 	}
-	return(0);
+	return 0;
 }
-

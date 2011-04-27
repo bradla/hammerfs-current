@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2008 The DragonFly Project.  All rights reserved.
- * 
+ *
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,8 +30,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
- * $DragonFly: src/sys/vfs/hammer/hammer_reblock.c,v 1.34 2008/11/13 02:18:43 dillon Exp $
+ *
+ * $DragonFly: src/sys/vfs/hammer/hammer_reblock.c,
+ * v 1.34 2008/11/13 02:18:43 dillon Exp $
  */
 /*
  * HAMMER reblocker - This code frees up fragmented physical space
@@ -77,12 +78,12 @@ hammer_ioc_reblock(hammer_transaction_t trans, hammer_inode_t ip,
 
 	if ((reblock->key_beg.localization | reblock->key_end.localization) &
 	    HAMMER_LOCALIZE_PSEUDOFS_MASK) {
-		return(EINVAL);
+		return 22; /* EINVAL */
 	}
 	if (reblock->key_beg.obj_id >= reblock->key_end.obj_id)
-		return(EINVAL);
+		return 22; /* EINVAL */
 	if (reblock->free_level < 0)
-		return(EINVAL);
+		return 22; /* EINVAL */
 
 	reblock->key_cur = reblock->key_beg;
 	reblock->key_cur.localization &= HAMMER_LOCALIZE_MASK;
@@ -138,9 +139,10 @@ retry:
 		/*
 		 * Yield to more important tasks
 		 */
-		if ((error = hammer_signal_check(trans->hmp)) != 0)
+		if (hammer_signal_check(trans->hmp) != 0) {
+			error = hammer_signal_check(trans->hmp);
 			break;
-
+		}
 		/*
 		 * If there is insufficient free space it may be due to
 		 * reserved bigblocks, which flushing might fix.
@@ -205,9 +207,8 @@ retry:
 			hammer_lock_cursor(&cursor);
 		}
 skip:
-		if (error == 0) {
+		if (error == 0)
 			error = hammer_btree_iterate(&cursor);
-		}
 	}
 	if (error == ENOENT)
 		error = 0;
@@ -224,7 +225,7 @@ skip:
 	}
 failed:
 	reblock->key_cur.localization &= HAMMER_LOCALIZE_MASK;
-	return(error);
+	return error;
 }
 
 /*
@@ -257,7 +258,7 @@ hammer_reblock_helper(struct hammer_ioc_reblock *reblock,
 	if (cursor->node->ondisk->type != HAMMER_BTREE_TYPE_LEAF)
 		goto skip;
 	if (elm->leaf.base.btype != HAMMER_BTREE_TYPE_RECORD)
-		return(0);
+		return 0;
 	tmp_offset = elm->leaf.data_offset;
 	if (tmp_offset == 0)
 		goto skip;
@@ -268,7 +269,7 @@ hammer_reblock_helper(struct hammer_ioc_reblock *reblock,
 	 * NOTE: Localization restrictions may also have been set-up, we can't
 	 *	 just set the match flags willy-nilly here.
 	 */
-	switch(elm->leaf.base.rec_type) {
+	switch (elm->leaf.base.rec_type) {
 	case HAMMER_RECTYPE_INODE:
 	case HAMMER_RECTYPE_SNAPSHOT:
 	case HAMMER_RECTYPE_CONFIG:
@@ -370,7 +371,7 @@ skip:
 				} else {
 					elm = NULL;
 				}
-				switch(cursor->node->ondisk->type) {
+				switch (cursor->node->ondisk->type) {
 				case HAMMER_BTREE_TYPE_LEAF:
 					error = hammer_reblock_leaf_node(
 							reblock, cursor, elm);
@@ -383,14 +384,13 @@ skip:
 					panic("Illegal B-Tree node type");
 				}
 			}
-			if (error == 0) {
+			if (error == 0)
 				++reblock->btree_moves;
-			}
 		}
 	}
 
 	hammer_cursor_downgrade(cursor);
-	return(error);
+	return error;
 }
 
 /*
@@ -409,7 +409,7 @@ hammer_reblock_data(struct hammer_ioc_reblock *reblock,
 	error = hammer_btree_extract(cursor, HAMMER_CURSOR_GET_DATA |
 					     HAMMER_CURSOR_GET_LEAF);
 	if (error)
-		return (error);
+		return error;
 	ndata = hammer_alloc_data(cursor->trans, elm->leaf.data_len,
 				  elm->leaf.base.rec_type,
 				  &ndata_offset, &data_buffer,
@@ -441,7 +441,7 @@ hammer_reblock_data(struct hammer_ioc_reblock *reblock,
 done:
 	if (data_buffer)
 		hammer_rel_buffer(data_buffer, 0);
-	return (error);
+	return error;
 }
 
 /*
@@ -466,7 +466,7 @@ hammer_reblock_leaf_node(struct hammer_ioc_reblock *reblock,
 	nnode = hammer_alloc_btree(cursor->trans, 0, &error);
 
 	if (nnode == NULL)
-		return (error);
+		return error;
 
 	/*
 	 * Move the node
@@ -477,7 +477,7 @@ hammer_reblock_leaf_node(struct hammer_ioc_reblock *reblock,
 
 	if (elm) {
 		/*
-		 * We are not the root of the B-Tree 
+		 * We are not the root of the B-Tree
 		 */
 		hammer_modify_node(cursor->trans, cursor->parent,
 				   &elm->internal.subtree_offset,
@@ -488,17 +488,17 @@ hammer_reblock_leaf_node(struct hammer_ioc_reblock *reblock,
 		/*
 		 * We are the root of the B-Tree
 		 */
-                hammer_volume_t volume;
-                        
-                volume = hammer_get_root_volume(cursor->trans->hmp, &error);
-                KKASSERT(error == 0);
+		hammer_volume_t volume;
 
-                hammer_modify_volume_field(cursor->trans, volume,
-					   vol0_btree_root);
-                volume->ondisk->vol0_btree_root = nnode->node_offset;
-                hammer_modify_volume_done(volume);
-                hammer_rel_volume(volume, 0);
-        }
+		volume = hammer_get_root_volume(cursor->trans->hmp, &error);
+		KKASSERT(error == 0);
+
+		hammer_modify_volume_field(cursor->trans, volume,
+					vol0_btree_root);
+		volume->ondisk->vol0_btree_root = nnode->node_offset;
+		hammer_modify_volume_done(volume);
+		hammer_rel_volume(volume, 0);
+	}
 
 	hammer_cursor_replaced_node(onode, nnode);
 	hammer_delete_node(cursor->trans, onode);
@@ -514,7 +514,7 @@ hammer_reblock_leaf_node(struct hammer_ioc_reblock *reblock,
 	hammer_unlock(&onode->lock);
 	hammer_rel_node(onode);
 
-	return (error);
+	return error;
 }
 
 /*
@@ -564,7 +564,7 @@ hammer_reblock_int_node(struct hammer_ioc_reblock *reblock,
 
 	if (elm) {
 		/*
-		 * We are not the root of the B-Tree 
+		 * We are not the root of the B-Tree
 		 */
 		hammer_modify_node(cursor->trans, cursor->parent,
 				   &elm->internal.subtree_offset,
@@ -575,17 +575,17 @@ hammer_reblock_int_node(struct hammer_ioc_reblock *reblock,
 		/*
 		 * We are the root of the B-Tree
 		 */
-                hammer_volume_t volume;
-                        
-                volume = hammer_get_root_volume(cursor->trans->hmp, &error);
-                KKASSERT(error == 0);
+		hammer_volume_t volume;
 
-                hammer_modify_volume_field(cursor->trans, volume,
+		volume = hammer_get_root_volume(cursor->trans->hmp, &error);
+		KKASSERT(error == 0);
+
+		hammer_modify_volume_field(cursor->trans, volume,
 					   vol0_btree_root);
-                volume->ondisk->vol0_btree_root = nnode->node_offset;
-                hammer_modify_volume_done(volume);
-                hammer_rel_volume(volume, 0);
-        }
+		volume->ondisk->vol0_btree_root = nnode->node_offset;
+		hammer_modify_volume_done(volume);
+		hammer_rel_volume(volume, 0);
+	}
 
 	/*
 	 * Now adjust our children's pointers to us.
@@ -619,6 +619,5 @@ hammer_reblock_int_node(struct hammer_ioc_reblock *reblock,
 
 done:
 	hammer_btree_unlock_children(cursor->trans->hmp, &lockroot, NULL);
-	return (error);
+	return error;
 }
-

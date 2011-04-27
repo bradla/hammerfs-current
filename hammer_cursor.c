@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2007-2008 The DragonFly Project.  All rights reserved.
- * 
+ *
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,8 +30,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
- * $DragonFly: src/sys/vfs/hammer/hammer_cursor.c,v 1.42 2008/08/06 15:38:58 dillon Exp $
+ *
+ * $DragonFly: src/sys/vfs/hammer/hammer_cursor.c,
+ * v 1.42 2008/08/06 15:38:58 dillon Exp $
  */
 
 /*
@@ -61,10 +62,11 @@ hammer_init_cursor(hammer_transaction_t trans, hammer_cursor_t cursor,
 	cursor->trans = trans;
 
 	/*
-	 * If the cursor operation is on behalf of an inode, lock
-	 * the inode.
-	 */
-	if ((cursor->ip = ip) != NULL) {
+	* If the cursor operation is on behalf of an inode, lock
+	* the inode.
+	*/
+	if (ip != NULL) {
+		cursor->ip = ip;
 		++ip->cursor_ip_refs;
 		if (trans->type == HAMMER_TRANS_FLS)
 			hammer_lock_ex(&ip->lock);
@@ -132,7 +134,7 @@ hammer_init_cursor(hammer_transaction_t trans, hammer_cursor_t cursor,
 		error = hammer_load_cursor_parent(cursor, 0);
 	KKASSERT(error == 0);
 	/* if (error) hammer_done_cursor(cursor); */
-	return(error);
+	return error;
 }
 
 /*
@@ -169,16 +171,17 @@ hammer_done_cursor(hammer_cursor_t cursor)
 		hammer_rel_node(cursor->node);
 		cursor->node = NULL;
 	}
-        if (cursor->data_buffer) {
-                hammer_rel_buffer(cursor->data_buffer, 0);
-                cursor->data_buffer = NULL;
-        }
-	if ((ip = cursor->ip) != NULL) {
-                KKASSERT(ip->cursor_ip_refs > 0);
-                --ip->cursor_ip_refs;
+	if (cursor->data_buffer) {
+		hammer_rel_buffer(cursor->data_buffer, 0);
+		cursor->data_buffer = NULL;
+	}
+	if (cursor->ip != NULL) {
+		ip = cursor->ip;
+		KKASSERT(ip->cursor_ip_refs > 0);
+		--ip->cursor_ip_refs;
 		hammer_unlock(&ip->lock);
-                cursor->ip = NULL;
-        }
+		cursor->ip = NULL;
+	}
 	if (cursor->iprec) {
 		hammer_rel_mem_record(cursor->iprec);
 		cursor->iprec = NULL;
@@ -214,7 +217,7 @@ hammer_done_cursor(hammer_cursor_t cursor)
  * The lock must already be either held shared or already held exclusively
  * by us.
  *
- * If we fail to upgrade the lock and cursor->deadlk_node is NULL, 
+ * If we fail to upgrade the lock and cursor->deadlk_node is NULL,
  * we add another reference to the node that failed and set
  * cursor->deadlk_node so hammer_done_cursor() can block on it.
  */
@@ -223,7 +226,7 @@ hammer_cursor_upgrade(hammer_cursor_t cursor)
 {
 	int error;
 
-	error = hammer_lock_upgrade(&cursor->node->lock,1);
+	error = hammer_lock_upgrade(&cursor->node->lock, 1);
 	if (error && cursor->deadlk_node == NULL) {
 		cursor->deadlk_node = cursor->node;
 		hammer_ref_node(cursor->deadlk_node);
@@ -234,7 +237,7 @@ hammer_cursor_upgrade(hammer_cursor_t cursor)
 			hammer_ref_node(cursor->deadlk_node);
 		}
 	}
-	return(error);
+	return error;
 }
 
 int
@@ -242,12 +245,12 @@ hammer_cursor_upgrade_node(hammer_cursor_t cursor)
 {
 	int error;
 
-	error = hammer_lock_upgrade(&cursor->node->lock,1);
+	error = hammer_lock_upgrade(&cursor->node->lock, 1);
 	if (error && cursor->deadlk_node == NULL) {
 		cursor->deadlk_node = cursor->node;
 		hammer_ref_node(cursor->deadlk_node);
 	}
-	return(error);
+	return error;
 }
 
 /*
@@ -289,7 +292,7 @@ collect_node(hammer_node_t *array, int *counts, int n, hammer_node_t node)
 	} else {
 		++counts[i];
 	}
-	return(i);
+	return i;
 }
 
 int
@@ -318,7 +321,7 @@ hammer_cursor_upgrade2(hammer_cursor_t cursor1, hammer_cursor_t cursor2)
 		while (--i >= 0)
 			hammer_lock_downgrade(&nodes[i]->lock, counts[i]);
 	}
-	return (error);
+	return error;
 }
 
 void
@@ -361,7 +364,7 @@ hammer_cursor_seek(hammer_cursor_t cursor, hammer_node_t node, int index)
 		cursor->node = node;
 		hammer_ref_node(node);
 		hammer_lock_sh(&node->lock);
-		KKASSERT ((node->flags & HAMMER_NODE_DELETED) == 0);
+		KKASSERT((node->flags & HAMMER_NODE_DELETED) == 0);
 
 		if (cursor->parent) {
 			hammer_unlock(&cursor->parent->lock);
@@ -372,7 +375,7 @@ hammer_cursor_seek(hammer_cursor_t cursor, hammer_node_t node, int index)
 		error = hammer_load_cursor_parent(cursor, 0);
 	}
 	cursor->index = index;
-	return (error);
+	return error;
 }
 
 /*
@@ -410,7 +413,7 @@ hammer_load_cursor_parent(hammer_cursor_t cursor, int try_exclusive)
 		cursor->right_bound = &hmp->root_btree_end;
 		error = 0;
 	}
-	return(error);
+	return error;
 }
 
 /*
@@ -429,10 +432,10 @@ hammer_cursor_up(hammer_cursor_t cursor)
 	 * return ENOENT.
 	 */
 	if (cursor->parent == NULL)
-		return (ENOENT);
+		return 2; /* ENOENT */
 
 	/*
-	 * Set the node to its parent. 
+	 * Set the node to its parent.
 	 */
 	hammer_unlock(&cursor->node->lock);
 	hammer_rel_node(cursor->node);
@@ -442,7 +445,7 @@ hammer_cursor_up(hammer_cursor_t cursor)
 	cursor->parent_index = 0;
 
 	error = hammer_load_cursor_parent(cursor, 0);
-	return(error);
+	return error;
 }
 
 /*
@@ -459,20 +462,20 @@ hammer_cursor_up_locked(hammer_cursor_t cursor)
 {
 	hammer_node_t save;
 	int error;
-        int save_index;
+	int save_index;
 
 	/*
 	 * If the parent is NULL we are at the root of the B-Tree and
 	 * return ENOENT.
 	 */
 	if (cursor->parent == NULL)
-		return (ENOENT);
+		return 2; /* ENOENT */
 
 	save = cursor->node;
 	save_index = cursor->index;
 
 	/*
-	 * Set the node to its parent. 
+	 * Set the node to its parent.
 	 */
 	cursor->node = cursor->parent;
 	cursor->index = cursor->parent_index;
@@ -480,14 +483,14 @@ hammer_cursor_up_locked(hammer_cursor_t cursor)
 	cursor->parent_index = 0;
 
 	/*
-	 * load the new parent, attempt to exclusively lock it.  Note that
-	 * we are still holding the old parent (now cursor->node) exclusively
-	 * locked.  This can return EDEADLK.
-         *
-	 * This can return EDEADLK.  Undo the operation on any error.  These
-	 * up sequences can occur during iterations so be sure to restore
-	 * the index.
-	 */
+	* load the new parent, attempt to exclusively lock it.  Note that
+	* we are still holding the old parent (now cursor->node) exclusively
+	* locked.  This can return EDEADLK.
+	*
+	* This can return EDEADLK.  Undo the operation on any error.  These
+	* up sequences can occur during iterations so be sure to restore
+	* the index.
+	*/
 	error = hammer_load_cursor_parent(cursor, 1);
 	if (error) {
 		cursor->parent = cursor->node;
@@ -495,7 +498,7 @@ hammer_cursor_up_locked(hammer_cursor_t cursor)
 		cursor->node = save;
 		cursor->index = save_index;
 	}
-	return(error);
+	return error;
 }
 
 
@@ -536,7 +539,7 @@ hammer_cursor_down(hammer_cursor_t cursor)
 	 * node the current node must be an internal node.  If elm specifies
 	 * a spike then the current node must be a leaf node.
 	 */
-	switch(elm->base.btype) {
+	switch (elm->base.btype) {
 	case HAMMER_BTREE_TYPE_INTERNAL:
 	case HAMMER_BTREE_TYPE_LEAF:
 		KKASSERT(node->ondisk->type == HAMMER_BTREE_TYPE_INTERNAL);
@@ -546,10 +549,18 @@ hammer_cursor_down(hammer_cursor_t cursor)
 		node = hammer_get_node(cursor->trans,
 				       elm->internal.subtree_offset, 0, &error);
 		if (error == 0) {
-			KASSERT(elm->base.btype == node->ondisk->type, ("BTYPE MISMATCH %c %c NODE %p\n", elm->base.btype, node->ondisk->type, node));
+			KASSERT(elm->base.btype == node->ondisk->type,
+			("BTYPE MISMATCH %c %c NODE %p\n",
+			elm->base.btype,
+			node->ondisk->type,
+			node));
 			if (node->ondisk->parent != cursor->parent->node_offset)
-				panic("node %p %016llx vs %016llx\n", node, (long long)node->ondisk->parent, cursor->parent->node_offset);
-			KKASSERT(node->ondisk->parent == cursor->parent->node_offset);
+				panic("node %p %016llx vs %016llx\n",
+					node,
+					(long long)node->ondisk->parent,
+					cursor->parent->node_offset);
+			KKASSERT(node->ondisk->parent ==
+				cursor->parent->node_offset);
 		}
 		break;
 	default:
@@ -560,11 +571,12 @@ hammer_cursor_down(hammer_cursor_t cursor)
 	}
 	if (error == 0) {
 		hammer_lock_sh(&node->lock);
-		KKASSERT ((node->flags & HAMMER_NODE_DELETED) == 0);
+		KKASSERT((node->flags &
+			HAMMER_NODE_DELETED) == 0);
 		cursor->node = node;
 		cursor->index = 0;
 	}
-	return(error);
+	return error;
 }
 
 /************************************************************************
@@ -672,7 +684,7 @@ hammer_lock_cursor(hammer_cursor_t cursor)
 		cursor->flags |= HAMMER_CURSOR_RETEST;
 	}
 	error = hammer_load_cursor_parent(cursor, 0);
-	return(error);
+	return error;
 }
 
 /*
@@ -707,7 +719,7 @@ hammer_recover_cursor(hammer_cursor_t cursor)
 		cursor->deadlk_rec = NULL;
 	}
 	error = hammer_lock_cursor(cursor);
-	return(error);
+	return error;
 }
 
 /*
@@ -743,12 +755,14 @@ hammer_push_cursor(hammer_cursor_t ocursor)
 	ocursor->data = NULL;
 	if (ncursor->flags & HAMMER_CURSOR_TRACKED)
 		TAILQ_INSERT_TAIL(&node->cursor_list, ncursor, deadlk_entry);
-	if ((ip = ncursor->ip) != NULL) {
-                ++ip->cursor_ip_refs;
+	if (ncursor->ip != NULL) {
+		ip = ncursor->ip;
+		++ip->cursor_ip_refs;
 	}
+
 	if (ncursor->iprec)
 		hammer_ref(&ncursor->iprec->lock);
-	return(ncursor);
+	return ncursor;
 }
 
 /*
@@ -768,7 +782,7 @@ hammer_pop_cursor(hammer_cursor_t ocursor, hammer_cursor_t ncursor)
 	ip = ncursor->ip;
 	ncursor->ip = NULL;
 	if (ip)
-                --ip->cursor_ip_refs;
+		--ip->cursor_ip_refs;
 	hammer_done_cursor(ncursor);
 	kfree(ncursor, hmp->m_misc);
 	KKASSERT(ocursor->ip == ip);
@@ -817,7 +831,7 @@ void
 hammer_cursor_removed_node(hammer_node_t node, hammer_node_t parent, int index)
 {
 	hammer_cursor_t cursor;
-        hammer_node_ondisk_t ondisk;
+	hammer_node_ondisk_t ondisk;
 
 	KKASSERT(parent != NULL);
 	ondisk = node->ondisk;
@@ -859,7 +873,8 @@ again:
 		TAILQ_REMOVE(&onode->cursor_list, cursor, deadlk_entry);
 		TAILQ_INSERT_TAIL(&nnode->cursor_list, cursor, deadlk_entry);
 		if (cursor->leaf == &ondisk->elms[cursor->index].leaf)
-			cursor->leaf = &nndisk->elms[cursor->index - index].leaf;
+			cursor->leaf =
+			&nndisk->elms[cursor->index - index].leaf;
 		cursor->node = nnode;
 		cursor->index -= index;
 		hammer_ref_node(nnode);
@@ -992,8 +1007,9 @@ hammer_cursor_deleted_element(hammer_node_t node, int index)
 			if (cursor->leaf == &ondisk->elms[cursor->index].leaf)
 				cursor->leaf = NULL;
 		} else if (cursor->index > index) {
-        		if (cursor->leaf == &ondisk->elms[cursor->index].leaf)
-				cursor->leaf = &ondisk->elms[cursor->index - 1].leaf;
+			if (cursor->leaf == &ondisk->elms[cursor->index].leaf)
+				cursor->leaf =
+				&ondisk->elms[cursor->index - 1].leaf;
 			--cursor->index;
 		}
 	}
@@ -1015,8 +1031,9 @@ hammer_cursor_inserted_element(hammer_node_t node, int index)
 	TAILQ_FOREACH(cursor, &node->cursor_list, deadlk_entry) {
 		KKASSERT(cursor->node == node);
 		if (cursor->index >= index) {
-        		if (cursor->leaf == &ondisk->elms[cursor->index].leaf)
-				cursor->leaf = &ondisk->elms[cursor->index + 1].leaf;
+			if (cursor->leaf == &ondisk->elms[cursor->index].leaf)
+				cursor->leaf =
+				&ondisk->elms[cursor->index + 1].leaf;
 			++cursor->index;
 		}
 	}
@@ -1032,10 +1049,9 @@ hammer_cursor_inserted_element(hammer_node_t node, int index)
 void
 hammer_cursor_invalidate_cache(hammer_cursor_t cursor)
 {
-        if (cursor->data_buffer) {
-                hammer_rel_buffer(cursor->data_buffer, 0);
-                cursor->data_buffer = NULL;
+	if (cursor->data_buffer) {
+		hammer_rel_buffer(cursor->data_buffer, 0);
+		cursor->data_buffer = NULL;
 		cursor->data = NULL;
-        }
+	}
 }
-

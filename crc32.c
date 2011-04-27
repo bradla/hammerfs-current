@@ -50,11 +50,6 @@
 
 #include "hammer.h"
 
-#ifndef _KERNEL
-/* prototypes for the kernel are in <sys/systm.h> */
-unsigned int crc32(const void *buf, size_t size);
-unsigned int crc32_ext(const void *buf, size_t size, unsigned int ocrc);
-#endif
 
 uint32_t crc32_tab[] = {
 	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,

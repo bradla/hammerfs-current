@@ -41,6 +41,10 @@
 
 #include "hammer.h"
 
+/*#include <sys/fcntl.h>
+#include <sys/nlookup.h>
+#include <sys/buf.h> */
+
 static int
 hammer_setup_device(struct vnode **devvpp, const char *dev_path, int ronly);
 

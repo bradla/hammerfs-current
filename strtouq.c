@@ -98,11 +98,11 @@ strtouq(const char *nptr, char **endptr, int base)
 			acc += c;
 		}
 	}
-	if (any < 0) {
+	if (any < 0)
 		acc = UQUAD_MAX;
-	} else if (neg)
+	else if (neg)
 		acc = -acc;
 	if (endptr != 0)
 		*((const char **)endptr) = any ? s - 1 : nptr;
-	return (acc);
+	return acc;
 }

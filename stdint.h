@@ -71,8 +71,8 @@ typedef	unsigned long long	__uint64_t;
 /*
  * Standard type definitions.
  */
-typedef	__int64_t	__intmax_t;
-typedef	__uint64_t	__uintmax_t;
+typedef	__int64_t	intmax_t;
+typedef	__uint64_t	uintmax_t;
 
 typedef	__int32_t	__intptr_t;
 typedef	__uint32_t	__uintptr_t;

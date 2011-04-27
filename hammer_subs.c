@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2007-2008 The DragonFly Project.  All rights reserved.
- * 
+ *
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,8 +30,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
- * $DragonFly: src/sys/vfs/hammer/hammer_subs.c,v 1.35 2008/10/15 22:38:37 dillon Exp $
+ *
+ * $DragonFly: src/sys/vfs/hammer/hammer_subs.c,
+ * v 1.35 2008/10/15 22:38:37 dillon Exp $
  */
 /*
  * HAMMER structural locking
@@ -42,10 +43,10 @@
 #define PINTERLOCKED    0x00000400      /* Interlocked tsleep */
 
 static inline int
-atomic_cmpset_int(volatile u_int *dst, u_int exp, u_int src)
+atomic_cmpset_int(u_int *dst, u_int exp, u_int src)
 {
 	u_char res;
- 
+
 	__asm __volatile(
 	"	pushfq ;		"
 	"	cli ;			"
@@ -63,7 +64,7 @@ atomic_cmpset_int(volatile u_int *dst, u_int exp, u_int src)
 	  "m" (*dst)			/* 4 */
 	: "memory");
 
-	return (res);
+	return res;
 }
 
 void
@@ -87,7 +88,7 @@ hammer_lock_ex_ident(struct hammer_lock *lock, const char *ident)
 			   lock->lowner == td) {
 			nlv = (lv + 1);
 			if (atomic_cmpset_int(&lock->lockval, lv, nlv))
-				break; 
+				break;
 		} else {
 			if (hammer_debug_locks) {
 				kprintf("hammer_lock_ex: held by %p\n",
@@ -96,11 +97,11 @@ hammer_lock_ex_ident(struct hammer_lock *lock, const char *ident)
 			nlv = lv | HAMMER_LOCKF_WANTED;
 			++hammer_contention_count;
 			/* XXX wait_event(&lock->lockval, 0); */
-			if (atomic_cmpset_int(&lock->lockval, lv, nlv)) {
-			/* XXX	tsleep(&lock->lockval, PINTERLOCKED, ident, 0); */
+			if (atomic_cmpset_int(&lock->lockval, lv, nlv))
+				/* XXX	tsleep(&lock->lockval,
+						PINTERLOCKED, ident, 0); */
 				if (hammer_debug_locks)
 					kprintf("hammer_lock_ex: try again\n");
-			}
 		}
 	}
 }
@@ -139,7 +140,7 @@ hammer_lock_ex_try(struct hammer_lock *lock)
 			break;
 		}
 	}
-	return (error);
+	return error;
 }
 
 /*
@@ -163,7 +164,7 @@ hammer_lock_sh(struct hammer_lock *lock)
 		if ((lv & HAMMER_LOCKF_EXCLUSIVE) == 0) {
 			nlv = (lv + 1);
 			if (atomic_cmpset_int(&lock->lockval, lv, nlv))
-				break; 
+				break;
 		} else if (lock->lowner == td) {
 			/*
 			 * Disallowed case, drop into kernel debugger for
@@ -174,13 +175,13 @@ hammer_lock_sh(struct hammer_lock *lock)
 				if (hammer_debug_critical)
 					Debugger("hammer_lock_sh: holding ex");
 				break;
-			} 
+			}
 		} else {
 			nlv = lv | HAMMER_LOCKF_WANTED;
 			++hammer_contention_count;
 			/* XXX wait_event(&lock->lockval, 0); */
 			if (atomic_cmpset_int(&lock->lockval, lv, nlv))
-				tsleep(&lock->lockval, PINTERLOCKED, ident, 0); 
+				tsleep(&lock->lockval, PINTERLOCKED, ident, 0);
 		}
 	}
 }
@@ -202,7 +203,7 @@ hammer_lock_sh_try(struct hammer_lock *lock)
 			if (atomic_cmpset_int(&lock->lockval, lv, nlv)) {
 				error = 0;
 				break;
-			} 
+			}
 		} else if (lock->lowner == td) {
 			/*
 			 * Disallowed case, drop into kernel debugger for
@@ -214,13 +215,13 @@ hammer_lock_sh_try(struct hammer_lock *lock)
 					Debugger("hammer_lock_sh: holding ex");
 				error = 0;
 				break;
-			} 
+			}
 		} else {
 			error = EAGAIN;
 			break;
 		}
 	}
-	return (error);
+	return error;
 }
 
 /*
@@ -248,7 +249,7 @@ hammer_lock_upgrade(struct hammer_lock *lock, int shcount)
 				lock->lowner = td;
 				error = 0;
 				break;
-			} 
+			}
 		} else if (lv & HAMMER_LOCKF_EXCLUSIVE) {
 			if (lock->lowner != curthread)
 				panic("hammer_lock_upgrade: illegal state");
@@ -264,7 +265,7 @@ hammer_lock_upgrade(struct hammer_lock *lock, int shcount)
 			break;
 		}
 	}
-	return (error);
+	return error;
 }
 
 /*
@@ -315,7 +316,7 @@ hammer_unlock(struct hammer_lock *lock)
 		if (nlv > 1) {
 			nlv = lv - 1;
 			if (atomic_cmpset_int(&lock->lockval, lv, nlv))
-				break; 
+				break;
 		} else if (nlv == 1) {
 			nlv = 0;
 			if (lv & HAMMER_LOCKF_EXCLUSIVE)
@@ -324,7 +325,7 @@ hammer_unlock(struct hammer_lock *lock)
 				if (lv & HAMMER_LOCKF_WANTED)
 					wakeup(&lock->lockval);
 				break;
-			} 
+			}
 		} else {
 			panic("hammer_unlock: lock %p is not held", lock);
 		}
@@ -341,9 +342,9 @@ hammer_lock_status(struct hammer_lock *lock)
 	u_int lv = lock->lockval;
 
 	if (lv & HAMMER_LOCKF_EXCLUSIVE)
-		return(1);
+		return 1;
 	else if (lv)
-		return(-1);
+		return -1;
 	panic("hammer_lock_status: lock must be held: %p", lock);
 }
 
@@ -368,12 +369,12 @@ hammer_ref(struct hammer_lock *lock)
 		if ((lv & ~HAMMER_REFS_FLAGS) == 0) {
 			nlv = (lv + 1) | HAMMER_REFS_CHECK;
 			if (atomic_cmpset_int(&lock->refs, lv, nlv))
-				return; 
+				return;
 		} else {
 			nlv = (lv + 1);
 			KKASSERT((int)nlv > 0);
-			if (atomic_cmpset_int(&lock->refs, lv, nlv)) 
-				return; 
+			if (atomic_cmpset_int(&lock->refs, lv, nlv))
+				return;
 		}
 	}
 	/* not reached */
@@ -399,12 +400,12 @@ hammer_rel(struct hammer_lock *lock)
 		if ((lv & ~HAMMER_REFS_FLAGS) == 1) {
 			nlv = (lv - 1) & ~HAMMER_REFS_CHECK;
 			if (atomic_cmpset_int(&lock->refs, lv, nlv))
-				return; 
+				return;
 		} else {
 			KKASSERT((int)lv > 0);
 			nlv = (lv - 1);
 			if (atomic_cmpset_int(&lock->refs, lv, nlv))
-				return; 
+				return;
 		}
 	}
 	/* not reached */
@@ -454,26 +455,26 @@ hammer_ref_interlock(struct hammer_lock *lock)
 			nlv = 1 | HAMMER_REFS_LOCKED | HAMMER_REFS_CHECK;
 			if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 				lock->rowner = curthread;
-				return(1);
-			} 
+				return 1;
+			}
 		} else {
 			nlv = (lv + 1);
 			if ((lv & ~HAMMER_REFS_FLAGS) == 0)
 				nlv |= HAMMER_REFS_CHECK;
 			if ((nlv & HAMMER_REFS_CHECK) == 0) {
 				if (atomic_cmpset_int(&lock->refs, lv, nlv))
-					return(0); 
+					return 0;
 			} else if (lv & HAMMER_REFS_LOCKED) {
 				/* CHECK also set here */
 				if (atomic_cmpset_int(&lock->refs, lv, nlv))
-					break; 
+					break;
 			} else {
 				/* CHECK also set here */
 				nlv |= HAMMER_REFS_LOCKED;
 				if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 					lock->rowner = curthread;
-					return(1);
-				} 
+					return 1;
+				}
 			}
 		}
 	}
@@ -490,19 +491,19 @@ hammer_ref_interlock(struct hammer_lock *lock)
 	for (;;) {
 		lv = lock->refs;
 		if ((lv & HAMMER_REFS_CHECK) == 0)
-			return(0);
+			return 0;
 		if (lv & HAMMER_REFS_LOCKED) {
 			/* wait_event(&lock->refs, 0); */
 			nlv = (lv | HAMMER_REFS_WANTED);
 			if (atomic_cmpset_int(&lock->refs, lv, nlv))
-				tsleep(&lock->refs, PINTERLOCKED, "h1lk", 0); 
+				tsleep(&lock->refs, PINTERLOCKED, "h1lk", 0);
 		} else {
 			/* CHECK also set here */
 			nlv = lv | HAMMER_REFS_LOCKED;
 			if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 				lock->rowner = curthread;
-				return(1);
-			} 
+				return 1;
+			}
 		}
 	}
 	/* not reached */
@@ -536,8 +537,8 @@ hammer_ref_interlock_true(struct hammer_lock *lock)
 		nlv = 1 | HAMMER_REFS_LOCKED | HAMMER_REFS_CHECK;
 		if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 			lock->rowner = curthread;
-			return (1);
-		} 
+			return 1;
+		}
 	}
 }
 
@@ -560,7 +561,7 @@ hammer_ref_interlock_done(struct hammer_lock *lock)
 			if (lv & HAMMER_REFS_WANTED)
 				wakeup(&lock->refs);
 			break;
-		} 
+		}
 	}
 }
 
@@ -594,7 +595,7 @@ hammer_rel_interlock(struct hammer_lock *lock, int locked)
 	 */
 	if (locked) {
 		hammer_rel(lock);
-		return(1);
+		return 1;
 	}
 
 	/*
@@ -608,28 +609,28 @@ hammer_rel_interlock(struct hammer_lock *lock, int locked)
 			nlv = 0 | HAMMER_REFS_LOCKED;
 			if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 				lock->rowner = curthread;
-				return(1);
-			} 
+				return 1;
+			}
 		} else if ((lv & ~HAMMER_REFS_FLAGS) == 1) {
 			if ((lv & HAMMER_REFS_LOCKED) == 0) {
 				nlv = (lv - 1) | HAMMER_REFS_LOCKED;
 				if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 					lock->rowner = curthread;
-					return(1);
-				} 
+					return 1;
+				}
 			} else {
 				nlv = lv | HAMMER_REFS_WANTED;
 				/* XXX wait_event(&lock->refs, 0); */
 				if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 					tsleep(&lock->refs, PINTERLOCKED,
 					       "h0lk", 0);
-				} 
+				}
 			}
 		} else {
 			nlv = (lv - 1);
 			KKASSERT((int)nlv >= 0);
 			if (atomic_cmpset_int(&lock->refs, lv, nlv))
-				return(0); 
+				return 0;
 		}
 	}
 	/* not reached */
@@ -661,7 +662,7 @@ hammer_rel_interlock_done(struct hammer_lock *lock, int orig_locked __unused)
 			if (lv & HAMMER_REFS_WANTED)
 				wakeup(&lock->refs);
 			break;
-		} 
+		}
 	}
 }
 
@@ -686,15 +687,15 @@ hammer_get_interlock(struct hammer_lock *lock)
 		lv = lock->refs;
 		if (lv & HAMMER_REFS_LOCKED) {
 			nlv = lv | HAMMER_REFS_WANTED;
-			/* wait_event(&lock->refs, 0); */ 
+			/* wait_event(&lock->refs, 0); */
 			if (atomic_cmpset_int(&lock->refs, lv, nlv))
-				tsleep(&lock->refs, PINTERLOCKED, "hilk", 0); 
+				tsleep(&lock->refs, PINTERLOCKED, "hilk", 0);
 		} else {
 			nlv = (lv | HAMMER_REFS_LOCKED);
 			if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 				lock->rowner = curthread;
-				return((lv & HAMMER_REFS_CHECK) ? 1 : 0);
-			} 
+				return (lv & HAMMER_REFS_CHECK) ? 1 : 0;
+			}
 		}
 	}
 }
@@ -712,8 +713,8 @@ hammer_get_interlock(struct hammer_lock *lock)
 int
 hammer_try_interlock_norefs(struct hammer_lock *lock)
 {
-	u_int lv;
-	u_int nlv;
+	u_int lv = 0;
+	u_int nlv = 0;
 
 	for (;;) {
 		lv = lock->refs;
@@ -721,10 +722,10 @@ hammer_try_interlock_norefs(struct hammer_lock *lock)
 			nlv = lv | HAMMER_REFS_LOCKED;
 			/* if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 				lock->rowner = curthread;
-				return(1);
+				return 1);
 			} */
 		} else {
-			return(0);
+			return 0;
 		}
 	}
 	/* not reached */
@@ -757,7 +758,7 @@ hammer_put_interlock(struct hammer_lock *lock, int error)
 			if (lv & HAMMER_REFS_WANTED)
 				wakeup(&lock->refs);
 			return;
-		} 
+		}
 	}
 }
 
@@ -791,12 +792,14 @@ hammer_sync_lock_sh(hammer_transaction_t trans)
 int
 hammer_sync_lock_sh_try(hammer_transaction_t trans)
 {
-	int error;
+	int error = 0;
 
 	++trans->sync_lock_refs;
-	if ((error = hammer_lock_sh_try(&trans->hmp->sync_lock)) != 0)
+	if (hammer_lock_sh_try(&trans->hmp->sync_lock) != 0) {
+		error = hammer_lock_sh_try(&trans->hmp->sync_lock);
 		--trans->sync_lock_refs;
-	return (error);
+	}
+	return error;
 }
 
 void
@@ -812,7 +815,7 @@ hammer_sync_unlock(hammer_transaction_t trans)
 u_int32_t
 hammer_to_unix_xid(uuid_t *uuid)
 {
-	return(*(u_int32_t *)&uuid->node[2]);
+	return *(u_int32_t *)&uuid->node[2];
 }
 
 void
@@ -836,7 +839,7 @@ hammer_timespec_to_time(struct timespec *ts)
 
 	xtime = (unsigned)(ts->tv_nsec / 1000) +
 		(unsigned long)ts->tv_sec * 1000000ULL;
-	return(xtime);
+	return xtime;
 }
 
 
@@ -846,25 +849,25 @@ hammer_timespec_to_time(struct timespec *ts)
 enum vtype
 hammer_get_vnode_type(u_int8_t obj_type)
 {
-	switch(obj_type) {
+	switch (obj_type) {
 	case HAMMER_OBJTYPE_DIRECTORY:
-		return(VDIR);
+		return VDIR;
 	case HAMMER_OBJTYPE_REGFILE:
-		return(VREG);
+		return VREG;
 	case HAMMER_OBJTYPE_DBFILE:
-		return(VDATABASE);
+		return VDATABASE;
 	case HAMMER_OBJTYPE_FIFO:
-		return(VFIFO);
+		return VFIFO;
 	case HAMMER_OBJTYPE_SOCKET:
-		return(VSOCK);
+		return VSOCK;
 	case HAMMER_OBJTYPE_CDEV:
-		return(VCHR);
+		return VCHR;
 	case HAMMER_OBJTYPE_BDEV:
-		return(VBLK);
+		return VBLK;
 	case HAMMER_OBJTYPE_SOFTLINK:
-		return(VLNK);
+		return VLNK;
 	default:
-		return(VBAD);
+		return VBAD;
 	}
 	/* not reached */
 }
@@ -872,25 +875,25 @@ hammer_get_vnode_type(u_int8_t obj_type)
 int
 hammer_get_dtype(u_int8_t obj_type)
 {
-	switch(obj_type) {
+	switch (obj_type) {
 	case HAMMER_OBJTYPE_DIRECTORY:
-		return(DT_DIR);
+		return DT_DIR;
 	case HAMMER_OBJTYPE_REGFILE:
-		return(DT_REG);
+		return DT_REG;
 	case HAMMER_OBJTYPE_DBFILE:
-		return(DT_DBF);
+		return DT_DBF;
 	case HAMMER_OBJTYPE_FIFO:
-		return(DT_FIFO);
+		return DT_FIFO;
 	case HAMMER_OBJTYPE_SOCKET:
-		return(DT_SOCK);
+		return DT_SOCK;
 	case HAMMER_OBJTYPE_CDEV:
-		return(DT_CHR);
+		return DT_CHR;
 	case HAMMER_OBJTYPE_BDEV:
-		return(DT_BLK);
+		return DT_BLK;
 	case HAMMER_OBJTYPE_SOFTLINK:
-		return(DT_LNK);
+		return DT_LNK;
 	default:
-		return(DT_UNKNOWN);
+		return DT_UNKNOWN;
 	}
 	/* not reached */
 }
@@ -898,25 +901,25 @@ hammer_get_dtype(u_int8_t obj_type)
 u_int8_t
 hammer_get_obj_type(enum vtype vtype)
 {
-	switch(vtype) {
+	switch (vtype) {
 	case VDIR:
-		return(HAMMER_OBJTYPE_DIRECTORY);
+		return HAMMER_OBJTYPE_DIRECTORY;
 	case VREG:
-		return(HAMMER_OBJTYPE_REGFILE);
+		return HAMMER_OBJTYPE_REGFILE;
 	case VDATABASE:
-		return(HAMMER_OBJTYPE_DBFILE);
+		return HAMMER_OBJTYPE_DBFILE;
 	case VFIFO:
-		return(HAMMER_OBJTYPE_FIFO);
+		return HAMMER_OBJTYPE_FIFO;
 	case VSOCK:
-		return(HAMMER_OBJTYPE_SOCKET);
+		return HAMMER_OBJTYPE_SOCKET;
 	case VCHR:
-		return(HAMMER_OBJTYPE_CDEV);
+		return HAMMER_OBJTYPE_CDEV;
 	case VBLK:
-		return(HAMMER_OBJTYPE_BDEV);
+		return HAMMER_OBJTYPE_BDEV;
 	case VLNK:
-		return(HAMMER_OBJTYPE_SOFTLINK);
+		return HAMMER_OBJTYPE_SOFTLINK;
 	default:
-		return(HAMMER_OBJTYPE_UNKNOWN);
+		return HAMMER_OBJTYPE_UNKNOWN;
 	}
 	/* not reached */
 }
@@ -928,10 +931,10 @@ int
 hammer_nohistory(hammer_inode_t ip)
 {
 	if (ip->hmp->hflags & HMNT_NOHISTORY)
-		return(HAMMER_DELETE_DESTROY);
+		return HAMMER_DELETE_DESTROY;
 	if (ip->ino_data.uflags & (SF_NOHISTORY|UF_NOHISTORY))
-		return(HAMMER_DELETE_DESTROY);
-	return(0);
+		return HAMMER_DELETE_DESTROY;
+	return 0;
 }
 
 /*
@@ -989,7 +992,7 @@ hammer_directory_namekey(hammer_inode_t dip, const void *name, int len,
 	case HAMMER_INODE_CAP_DIRHASH_ALG1:
 		key = (u_int32_t)crc32(aname, len) & 0xFFFFFFFEU;
 
-		switch(len) {
+		switch (len) {
 		default:
 			crcx = crc32(aname + 3, len - 5);
 			crcx = crcx ^ (crcx >> 6) ^ (crcx >> 12);
@@ -1028,7 +1031,7 @@ hammer_directory_namekey(hammer_inode_t dip, const void *name, int len,
 		panic("hammer_directory_namekey: bad algorithm %p\n", dip);
 		break;
 	}
-	return(key);
+	return key;
 }
 
 /*
@@ -1058,9 +1061,8 @@ hammer_str_to_tid(const char *str, int *ispfsp,
 		/* ok */
 	} else if (n == 18 && str[0] == '0' && (str[1] | 0x20) == 'x') {
 		/* ok */
-	} else {
-		return(EINVAL);
-	}
+	} else
+		return 22; /* EINVAL */
 
 	/*
 	 * Forms allowed for PFS:  ":%05d"  (i.e. "...:0" would be illegal).
@@ -1069,7 +1071,7 @@ hammer_str_to_tid(const char *str, int *ispfsp,
 	if (*str == ':') {
 		localization = strtoul(str + 1, &ptr, 10) << 16;
 		if (ptr - str != 6)
-			return(EINVAL);
+			return 22; /* EINVAL */
 		str = ptr;
 		ispfs = 1;
 	} else {
@@ -1081,11 +1083,11 @@ hammer_str_to_tid(const char *str, int *ispfsp,
 	 * Any trailing junk invalidates special extension handling.
 	 */
 	if (*str)
-		return(EINVAL);
+		return 22; /* EINVAL */
 	*tidp = tid;
 	*localizationp = localization;
 	*ispfsp = ispfs;
-	return(0);
+	return 0;
 }
 
 void
@@ -1117,7 +1119,7 @@ hammer_crc_test_volume(hammer_volume_ondisk_t ondisk)
 
 	crc = crc32(ondisk, HAMMER_VOL_CRCSIZE1) ^
 	      crc32(&ondisk->vol_crc + 1, HAMMER_VOL_CRCSIZE2);
-	return (ondisk->vol_crc == crc);
+	return ondisk->vol_crc == crc;
 }
 
 int
@@ -1126,7 +1128,7 @@ hammer_crc_test_btree(hammer_node_ondisk_t ondisk)
 	hammer_crc_t crc;
 
 	crc = crc32(&ondisk->crc + 1, HAMMER_BTREE_CRCSIZE);
-	return (ondisk->crc == crc);
+	return ondisk->crc == crc;
 }
 
 /*
@@ -1141,13 +1143,13 @@ hammer_crc_test_leaf(void *data, hammer_btree_leaf_elm_t leaf)
 {
 	hammer_crc_t crc;
 
-	if (leaf->data_len == 0) {
+	if (leaf->data_len == 0)
 		crc = 0;
-	} else {
-		switch(leaf->base.rec_type) {
+	else {
+		switch (leaf->base.rec_type) {
 		case HAMMER_RECTYPE_INODE:
 			if (leaf->data_len != sizeof(struct hammer_inode_data))
-				return(0);
+				return 0;
 			crc = crc32(data, HAMMER_INODE_CRCSIZE);
 			break;
 		default:
@@ -1155,16 +1157,16 @@ hammer_crc_test_leaf(void *data, hammer_btree_leaf_elm_t leaf)
 			break;
 		}
 	}
-	return (leaf->data_crc == crc);
+	return leaf->data_crc == crc;
 }
 
 void
 hammer_crc_set_leaf(void *data, hammer_btree_leaf_elm_t leaf)
 {
-	if (leaf->data_len == 0) {
+	if (leaf->data_len == 0)
 		leaf->data_crc = 0;
-	} else {
-		switch(leaf->base.rec_type) {
+	else {
+		switch (leaf->base.rec_type) {
 		case HAMMER_RECTYPE_INODE:
 			KKASSERT(leaf->data_len ==
 				  sizeof(struct hammer_inode_data));
@@ -1196,31 +1198,31 @@ int
 hammer_blocksize(int64_t file_offset)
 {
 	if (file_offset < HAMMER_XDEMARC)
-		return(HAMMER_BUFSIZE);
+		return HAMMER_BUFSIZE;
 	else
-		return(HAMMER_XBUFSIZE);
+		return HAMMER_XBUFSIZE;
 }
 
 int
 hammer_blockoff(int64_t file_offset)
 {
 	if (file_offset < HAMMER_XDEMARC)
-		return((int)file_offset & HAMMER_BUFMASK);
+		return (int)file_offset & HAMMER_BUFMASK;
 	else
-		return((int)file_offset & HAMMER_XBUFMASK);
+		return (int)file_offset & HAMMER_XBUFMASK;
 }
 
 /*
  * Return the demarkation point between the two offsets where
- * the block size changes. 
+ * the block size changes.
  */
 int64_t
 hammer_blockdemarc(int64_t file_offset1, int64_t file_offset2)
 {
 	if (file_offset1 < HAMMER_XDEMARC) {
 		if (file_offset2 <= HAMMER_XDEMARC)
-			return(file_offset2);
-		return(HAMMER_XDEMARC);
+			return file_offset2;
+		return HAMMER_XDEMARC;
 	}
 	panic("hammer_blockdemarc: illegal range %lld %lld\n",
 	      (long long)file_offset1, (long long)file_offset2);
@@ -1232,6 +1234,5 @@ hammer_fsid_to_udev(uuid_t *uuid)
 	u_int32_t crc;
 
 	crc = crc32(uuid, sizeof(*uuid));
-	return((udev_t)crc);
+	return  (udev_t)crc;
 }
-

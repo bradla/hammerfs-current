@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2007-2008 The DragonFly Project.  All rights reserved.
- * 
+ *
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,8 +30,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
- * $DragonFly: src/sys/vfs/hammer/hammer_ondisk.c,v 1.76 2008/08/29 20:19:08 dillon Exp $
+ *
+ * $DragonFly: src/sys/vfs/hammer/hammer_ondisk.c,v
+ * 1.76 2008/08/29 20:19:08 dillon Exp $
  */
 /*
  * Manage HAMMER's on-disk structures.  These routines are primarily
@@ -54,34 +55,34 @@ static int
 hammer_vol_rb_compare(hammer_volume_t vol1, hammer_volume_t vol2)
 {
 	if (vol1->vol_no < vol2->vol_no)
-		return(-1);
+		return -1;
 	if (vol1->vol_no > vol2->vol_no)
-		return(1);
-	return(0);
+		return 1;
+	return 0;
 }
 
 /*
  * hammer_buffer structures are indexed via their zoneX_offset, not
  * their zone2_offset.
- */		
+ */
 static int
 hammer_buf_rb_compare(hammer_buffer_t buf1, hammer_buffer_t buf2)
 {
 	if (buf1->zoneX_offset < buf2->zoneX_offset)
-		return(-1);
+		return -1;
 	if (buf1->zoneX_offset > buf2->zoneX_offset)
-		return(1);
-	return(0);
+		return 1;
+	return 0;
 }
 
 static int
 hammer_nod_rb_compare(hammer_node_t node1, hammer_node_t node2)
 {
 	if (node1->node_offset < node2->node_offset)
-		return(-1);
+		return -1;
 	if (node1->node_offset > node2->node_offset)
-		return(1);
-	return(0);
+		return 1;
+	return 0;
 }
 
 RB_GENERATE2(hammer_vol_rb_tree, hammer_volume, rb_node,
@@ -123,7 +124,7 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	++hammer_count_volumes;
 	volume = kmalloc(sizeof(*volume), hmp->m_misc, M_WAITOK|M_ZERO);
 /*	volume->vol_name = kstrdup(volname, hmp->m_misc); */
-        volume->vol_name = kstrdup(volname, GFP_KERNEL);
+	volume->vol_name = kstrdup(volname, GFP_KERNEL);
 	volume->io.hmp = hmp;	/* bootstrap */
 	hammer_io_init(&volume->io, volume, HAMMER_STRUCTURE_VOLUME);
 	volume->io.offset = 0LL;
@@ -133,11 +134,13 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	 * Get the device vnode
 	 */
 	if (devvp == NULL) {
-		error = nlookup_init(&nd, volume->vol_name, UIO_SYSSPACE, NLC_FOLLOW);
+		error = nlookup_init(&nd, volume->vol_name,
+						UIO_SYSSPACE, NLC_FOLLOW);
 		if (error == 0)
 			error = nlookup(&nd);
 		if (error == 0)
-			error = cache_vref(&nd.nl_nch, nd.nl_cred, &volume->devvp);
+			error = cache_vref(&nd.nl_nch,
+						nd.nl_cred, &volume->devvp);
 		nlookup_done(&nd);
 	} else {
 		error = 0;
@@ -145,22 +148,22 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	}
 
 	if (error == 0) {
-		if (vn_isdisk(volume->devvp, &error)) {
+		if (vn_isdisk(volume->devvp, &error))
 			error = vfs_mountedon(volume->devvp);
-		}
 	}
 	/*
 	if (error == 0 &&
 	    count_udev(volume->devvp->v_umajor, volume->devvp->v_uminor) > 0) {
 		error = EBUSY;
 	}*/
-	if (error == 0 && count_udev(volume->devvp->v_umajor, volume->devvp->v_uminor) > 0)
+	if (error == 0 && count_udev(volume->devvp->v_umajor,
+		volume->devvp->v_uminor) > 0)
 		error = EBUSY;
 	if (error == 0) {
 		vn_lock(volume->devvp, LK_EXCLUSIVE | LK_RETRY);
 		error = vinvalbuf(volume->devvp, V_SAVE, 0, 0);
 		if (error == 0) {
-			error = VOP_OPEN(volume->devvp, 
+			error = VOP_OPEN(volume->devvp,
 					 (ronly ? FREAD : FREAD|FWRITE),
 					 FSCRED, NULL);
 		}
@@ -168,17 +171,18 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	}
 	if (error) {
 		hammer_free_volume(volume);
-		return(error);
+		return error;
 	}
 	volume->devvp->v_rdev->si_mountpoint = mp;
 	setmp = 1;
 
 	/*
-	 * Extract the volume number from the volume header and do various
-	 * sanity checks.
-	 * 	error = bread(volume->devvp, 0LL, HAMMER_BUFSIZE, &bp);
-	 */
-	error = bread((struct super_block *)volume->devvp, 0LL, HAMMER_BUFSIZE, &bp);
+	* Extract the volume number from the volume header and do various
+	* sanity checks.
+	* error = bread(volume->devvp, 0LL, HAMMER_BUFSIZE, &bp);
+	*/
+	error = bread((struct super_block *)volume->devvp,
+					0LL, HAMMER_BUFSIZE, &bp);
 	if (error)
 		goto late_failure;
 	ondisk = (void *)bp->b_data;
@@ -191,7 +195,7 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	volume->vol_no = ondisk->vol_no;
 	volume->buffer_base = ondisk->vol_buf_beg;
 	volume->vol_flags = ondisk->vol_flags;
-	volume->nblocks = ondisk->vol_nblocks; 
+	volume->nblocks = ondisk->vol_nblocks;
 	volume->maxbuf_off = HAMMER_ENCODE_RAW_BUFFER(volume->vol_no,
 				    ondisk->vol_buf_end - ondisk->vol_buf_beg);
 	volume->maxraw_off = ondisk->vol_buf_end;
@@ -241,7 +245,7 @@ late_failure:
 		VOP_CLOSE(volume->devvp, ronly ? FREAD : FREAD|FWRITE);
 		hammer_free_volume(volume);
 	}
-	return (error);
+	return error;
 }
 
 /*
@@ -264,7 +268,7 @@ hammer_adjust_volume_mode(hammer_volume_t volume, void *data __unused)
 		}
 		vn_unlock(volume->devvp);
 	}
-	return(0);
+	return 0;
 }
 
 /*
@@ -296,7 +300,7 @@ hammer_unload_volume(hammer_volume_t volume, void *data __unused)
 	/*
 	 * Clean up the persistent ref ioerror might have on the volume
 	 */
-	/* 
+	/*
 	if (volume->io.ioerror) {
 		volume->io.ioerror = 0;
 		hammer_(&volume->io.lock);
@@ -317,8 +321,8 @@ hammer_unload_volume(hammer_volume_t volume, void *data __unused)
 	 * no super-clusters.
 	 */
 /*	KKASSERT(volume->io.lock.refs == 0); */
-        KKASSERT(hammer_norefs(&volume->io.lock));
-        
+	KKASSERT(hammer_norefs(&volume->io.lock));
+
 	if (bp)
 		dfly_brelse(bp);
 	/* XX Maybe: KKASSERT(hammer_norefs(&volume->io.lock)); */
@@ -354,7 +358,7 @@ hammer_unload_volume(hammer_volume_t volume, void *data __unused)
 	 */
 	RB_REMOVE(hammer_vol_rb_tree, &hmp->rb_vols_root, volume);
 	hammer_free_volume(volume);
-	return(0);
+	return 0;
 }
 
 static
@@ -389,7 +393,7 @@ hammer_get_volume(struct hammer_mount *hmp, int32_t vol_no, int *errorp)
 	volume = RB_LOOKUP(hammer_vol_rb_tree, &hmp->rb_vols_root, vol_no);
 	if (volume == NULL) {
 		*errorp = ENOENT;
-		return(NULL);
+		return NULL;
 	}
 
 	/*
@@ -405,7 +409,7 @@ hammer_get_volume(struct hammer_mount *hmp, int32_t vol_no, int *errorp)
 		KKASSERT(volume->ondisk);
 		*errorp = 0;
 	}
-	return(volume);
+	return volume;
 }
 
 int
@@ -423,7 +427,7 @@ hammer_ref_volume(hammer_volume_t volume)
 		KKASSERT(volume->ondisk);
 		error = 0;
 	}
-	return (error);
+	return error;
 }
 
 hammer_volume_t
@@ -446,7 +450,7 @@ hammer_get_root_volume(struct hammer_mount *hmp, int *errorp)
 		KKASSERT(volume->ondisk);
 		*errorp = 0;
 	}
-	return (volume);
+	return volume;
 }
 
 /*
@@ -463,7 +467,7 @@ hammer_load_volume(hammer_volume_t volume)
 	hammer_lock_ex(&volume->io.lock);
 
 	if (volume->ondisk == NULL) {
-	error = hammer_io_read(volume->sb, &volume->io,
+		error = hammer_io_read(volume->sb, &volume->io,
 				       HAMMER_BUFSIZE);
 /*		error = hammer_io_read(volume->sb, &volume->io,
 				       volume->maxraw_off); */
@@ -474,7 +478,7 @@ hammer_load_volume(hammer_volume_t volume)
 	}
 	--volume->io.loading;
 	hammer_unlock(&volume->io.lock);
-	return(error);
+	return error;
 }
 
 /*
@@ -516,9 +520,9 @@ hammer_mountcheck_volumes(struct hammer_mount *hmp)
 	for (i = 0; i < hmp->nvolumes; ++i) {
 		vol = RB_LOOKUP(hammer_vol_rb_tree, &hmp->rb_vols_root, i);
 		if (vol == NULL)
-			return(EINVAL);
+			return -1; /* fix ??? EINVAL */
 	}
-	return(0);
+	return 0;
 }
 
 /************************************************************************
@@ -556,7 +560,7 @@ again:
 		 */
 		if (buffer->ondisk && buffer->io.loading == 0) {
 			*errorp = 0;
-			return(buffer);
+			return buffer;
 		}
 
 		/*
@@ -583,7 +587,7 @@ again:
 	 */
 	zone = HAMMER_ZONE_DECODE(buf_offset);
 
-	switch(zone) {
+	switch (zone) {
 	case HAMMER_ZONE_LARGE_DATA_INDEX:
 	case HAMMER_ZONE_SMALL_DATA_INDEX:
 		iotype = HAMMER_STRUCTURE_DATA_BUFFER;
@@ -616,7 +620,7 @@ again:
 		*errorp = 0;
 	}
 	if (*errorp)
-		return(NULL);
+		return NULL;
 
 	/*
 	 * NOTE: zone2_offset and maxbuf_off are both full zone-2 offset
@@ -627,7 +631,7 @@ again:
 	vol_no = HAMMER_VOL_DECODE(zone2_offset);
 	volume = hammer_get_volume(hmp, vol_no, errorp);
 	if (volume == NULL)
-		return(NULL);
+		return NULL;
 
 	KKASSERT(zone2_offset < volume->maxbuf_off);
 
@@ -671,7 +675,7 @@ found:
 	} else {
 		*errorp = 0;
 	}
-	return(buffer);
+	return buffer;
 }
 
 /*
@@ -797,7 +801,7 @@ hammer_load_buffer(hammer_buffer_t buffer, int isnew)
 	}
 	--buffer->io.loading;
 	hammer_unlock(&buffer->io.lock);
-	return (error);
+	return error;
 }
 
 /*
@@ -828,7 +832,7 @@ hammer_unload_buffer(hammer_buffer_t buffer, void *data __unused)
 	hammer_flush_buffer_nodes(buffer);
 	KKASSERT(buffer->io.lock.refs == 1);
 	hammer_rel_buffer(buffer, 2);
-	return(0);
+	return 0;
 }
 
 /*
@@ -870,7 +874,7 @@ hammer_ref_buffer(hammer_buffer_t buffer)
 	} else {
 		error = 0;
 	}
-	return(error);
+	return error;
 }
 
 /*
@@ -945,7 +949,7 @@ hammer_rel_buffer(hammer_buffer_t buffer, int flush)
  * Any prior buffer in *bufferp will be released and replaced by the
  * requested buffer.
  */
-static __inline
+static inline
 void *
 _hammer_bread(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
 	     int *errorp, struct hammer_buffer **bufferp)
@@ -963,32 +967,31 @@ _hammer_bread(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
 			hammer_rel_buffer(buffer, 0);
 		buffer = hammer_get_buffer(hmp, buf_offset, bytes, 0, errorp);
 		*bufferp = buffer;
-	} else {
+	} else
 		*errorp = 0;
-	}
 
 	/*
 	 * Return a pointer to the buffer data.
 	 */
 	if (buffer == NULL)
-		return(NULL);
+		return NULL;
 	else
-		return((char *)buffer->ondisk + xoff);
+		return (char *)buffer->ondisk + xoff;
 }
 
 void *
 hammer_bread(hammer_mount_t hmp, hammer_off_t buf_offset,
-	     int *errorp, struct hammer_buffer **bufferp)
+				int *errorp, struct hammer_buffer **bufferp)
 {
-	return(_hammer_bread(hmp, buf_offset, HAMMER_BUFSIZE, errorp, bufferp));
+	return _hammer_bread(hmp, buf_offset, HAMMER_BUFSIZE, errorp, bufferp);
 }
 
 void *
 hammer_bread_ext(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
-	         int *errorp, struct hammer_buffer **bufferp)
+				int *errorp, struct hammer_buffer **bufferp)
 {
 	bytes = (bytes + HAMMER_BUFMASK) & ~HAMMER_BUFMASK;
-	return(_hammer_bread(hmp, buf_offset, bytes, errorp, bufferp));
+	return _hammer_bread(hmp, buf_offset, bytes, errorp, bufferp);
 }
 
 /*
@@ -1001,7 +1004,7 @@ hammer_bread_ext(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
  * This function marks the buffer dirty but does not increment its
  * modify_refs count.
  */
-static __inline
+static inline
 void *
 _hammer_bnew(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
 	     int *errorp, struct hammer_buffer **bufferp)
@@ -1026,16 +1029,16 @@ _hammer_bnew(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
 	 * Return a pointer to the buffer data.
 	 */
 	if (buffer == NULL)
-		return(NULL);
+		return NULL;
 	else
-		return((char *)buffer->ondisk + xoff);
+		return (char *)buffer->ondisk + xoff;
 }
 
 void *
 hammer_bnew(hammer_mount_t hmp, hammer_off_t buf_offset,
 	     int *errorp, struct hammer_buffer **bufferp)
 {
-	return(_hammer_bnew(hmp, buf_offset, HAMMER_BUFSIZE, errorp, bufferp));
+	return _hammer_bnew(hmp, buf_offset, HAMMER_BUFSIZE, errorp, bufferp);
 }
 
 void *
@@ -1043,7 +1046,7 @@ hammer_bnew_ext(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
 		int *errorp, struct hammer_buffer **bufferp)
 {
 	bytes = (bytes + HAMMER_BUFMASK) & ~HAMMER_BUFMASK;
-	return(_hammer_bnew(hmp, buf_offset, bytes, errorp, bufferp));
+	return _hammer_bnew(hmp, buf_offset, bytes, errorp, bufferp);
 }
 
 /************************************************************************
@@ -1087,7 +1090,8 @@ again:
 	node = RB_LOOKUP(hammer_nod_rb_tree, &hmp->rb_nods_root, node_offset);
 	if (node == NULL) {
 		++hammer_count_nodes;
-		node = kmalloc(sizeof(*node), hmp->m_misc, M_WAITOK|M_ZERO|M_USE_RESERVE);
+		node = kmalloc(sizeof(*node), hmp->m_misc,
+					M_WAITOK|M_ZERO|M_USE_RESERVE);
 		node->node_offset = node_offset;
 		node->hmp = hmp;
 		TAILQ_INIT(&node->cursor_list);
@@ -1102,14 +1106,14 @@ again:
 	if (node->ondisk) {
 		*errorp = 0;
 	} else {
-        	*errorp = hammer_load_node(trans, node, isnew);
+		*errorp = hammer_load_node(trans, node, isnew);
 		trans->flags |= HAMMER_TRANSF_DIDIO;
 	}
 	if (*errorp) {
 		_hammer_rel_node(node, 1);
 		node = NULL;
 	}
-	return(node);
+	return node;
 }
 
 /*
@@ -1151,7 +1155,8 @@ hammer_load_node(hammer_transaction_t trans, hammer_node_t node, int isnew)
 		 * node->buffer may become NULL while we are blocked
 		 * referencing the buffer.
 		 */
-		if ((buffer = node->buffer) != NULL) {
+		if (node->buffer != NULL) {
+			buffer = node->buffer;
 			error = hammer_ref_buffer(buffer);
 			if (error == 0 && node->buffer == NULL) {
 				TAILQ_INSERT_TAIL(&buffer->clist,
@@ -1172,9 +1177,9 @@ hammer_load_node(hammer_transaction_t trans, hammer_node_t node, int isnew)
 		if (error)
 			goto failed;
 		node->ondisk = (void *)((char *)buffer->ondisk +
-				        (node->node_offset & HAMMER_BUFMASK));
-		if (isnew == 0 && 
-		    (node->flags & HAMMER_NODE_CRCGOOD) == 0) {
+				(node->node_offset & HAMMER_BUFMASK));
+	if (isnew == 0 &&
+			(node->flags & HAMMER_NODE_CRCGOOD) == 0) {
 			if (hammer_crc_test_btree(node->ondisk) == 0)
 				Debugger("CRC FAILED: B-TREE NODE");
 			node->flags |= HAMMER_NODE_CRCGOOD;
@@ -1183,7 +1188,7 @@ hammer_load_node(hammer_transaction_t trans, hammer_node_t node, int isnew)
 failed:
 	--node->loading;
 	hammer_unlock(&node->lock);
-	return (error);
+	return error;
 }
 
 /*
@@ -1191,7 +1196,7 @@ failed:
  */
 hammer_node_t
 hammer_ref_node_safe(hammer_transaction_t trans, hammer_node_cache_t cache,
-		     int *errorp)
+		int *errorp)
 {
 	hammer_node_t node;
 
@@ -1201,15 +1206,15 @@ hammer_ref_node_safe(hammer_transaction_t trans, hammer_node_cache_t cache,
 		if (node->ondisk)
 			*errorp = 0;
 		else
-		        *errorp = hammer_load_node(trans, node, 0);
+			*errorp = hammer_load_node(trans, node, 0);
 		if (*errorp) {
 			_hammer_rel_node(node, 0);
 			node = NULL;
 		}
-	} else {
+	else
 		*errorp = ENOENT;
 	}
-	return(node);
+	return node;
 }
 
 /*
@@ -1280,7 +1285,7 @@ _hammer_rel_node(hammer_node_t node, int locked)
 void
 hammer_rel_node(hammer_node_t node)
 {
-        _hammer_rel_node(node, 0);
+	_hammer_rel_node(node, 0);
 }
 
 /*
@@ -1323,7 +1328,8 @@ hammer_uncache_node(hammer_node_cache_t cache)
 {
 	hammer_node_t node;
 
-	if ((node = cache->node) != NULL) {
+	if (cache->node != NULL) {
+		node = cache->node;
 		TAILQ_REMOVE(&node->cache_list, cache, entry);
 		cache->node = NULL;
 		if (TAILQ_EMPTY(&node->cache_list))
@@ -1356,7 +1362,9 @@ hammer_flush_node(hammer_node_t node, int locked)
 	if (node->lock.refs == 0 && node->ondisk == NULL) {
 		KKASSERT((node->flags & HAMMER_NODE_NEEDSCRC) == 0);
 		RB_REMOVE(hammer_nod_rb_tree, &node->hmp->rb_nods_root, node);
-		if ((buffer = node->buffer) != NULL) {
+
+		if (node->buffer != NULL) {
+			buffer = node->buffer;
 			node->buffer = NULL;
 			TAILQ_REMOVE(&buffer->clist, node, entry);
 			/* buffer is unreferenced because ondisk is NULL */
@@ -1413,8 +1421,8 @@ hammer_alloc_btree(hammer_transaction_t trans, hammer_off_t hint, int *errorp)
 	hammer_off_t node_offset;
 
 	node_offset = hammer_blockmap_alloc(trans, HAMMER_ZONE_BTREE_INDEX,
-					    sizeof(struct hammer_node_ondisk),
-					    hint,errorp);
+					sizeof(struct hammer_node_ondisk),
+					hint, errorp);
 	if (*errorp == 0) {
 		node = hammer_get_node(trans, node_offset, 1, errorp);
 		hammer_modify_node_noundo(trans, node);
@@ -1423,7 +1431,7 @@ hammer_alloc_btree(hammer_transaction_t trans, hammer_off_t hint, int *errorp)
 	}
 	if (buffer)
 		hammer_rel_buffer(buffer, 0);
-	return(node);
+	return node;
 }
 
 /*
@@ -1437,19 +1445,19 @@ hammer_alloc_btree(hammer_transaction_t trans, hammer_off_t hint, int *errorp)
  * *data_bufferp.
  */
 void *
-hammer_alloc_data(hammer_transaction_t trans, int32_t data_len, 
-		  u_int16_t rec_type, hammer_off_t *data_offsetp,
-		  struct hammer_buffer **data_bufferp, 
-		    hammer_off_t hint, int *errorp)
+hammer_alloc_data(hammer_transaction_t trans, int32_t data_len,
+	u_int16_t rec_type, hammer_off_t *data_offsetp,
+	struct hammer_buffer **data_bufferp,
+	hammer_off_t hint, int *errorp)
 {
 	void *data;
 	int zone;
 
 	/*
-	 * Allocate data
-	 */
+	* Allocate data
+	*/
 	if (data_len) {
-		switch(rec_type) {
+		switch (rec_type) {
 		case HAMMER_RECTYPE_INODE:
 		case HAMMER_RECTYPE_DIRENTRY:
 		case HAMMER_RECTYPE_EXT:
@@ -1465,32 +1473,35 @@ hammer_alloc_data(hammer_transaction_t trans, int32_t data_len,
 				zone = HAMMER_ZONE_SMALL_DATA_INDEX;
 			} else {
 				data_len = (data_len + HAMMER_BUFMASK) &
-					   ~HAMMER_BUFMASK;
+						~HAMMER_BUFMASK;
 				zone = HAMMER_ZONE_LARGE_DATA_INDEX;
 			}
 			break;
 		default:
 			panic("hammer_alloc_data: rec_type %04x unknown",
-			      rec_type);
+						rec_type);
 			zone = 0;	/* NOT REACHED */
 			break;
 		}
-		*data_offsetp = hammer_blockmap_alloc(trans, zone, data_len,
-						      hint, errorp);
-	} else {
+		*data_offsetp = hammer_blockmap_alloc(trans,
+						zone,
+						data_len,
+						hint,
+						errorp);
+	} else
 		*data_offsetp = 0;
-	}
+
 	if (*errorp == 0 && data_bufferp) {
 		if (data_len) {
 			data = hammer_bread_ext(trans->hmp, *data_offsetp,
-						data_len, errorp, data_bufferp);
+					data_len, errorp, data_bufferp);
 		} else {
 			data = NULL;
 		}
 	} else {
 		data = NULL;
 	}
-	return(data);
+	return data;
 }
 
 /*
@@ -1511,12 +1522,12 @@ hammer_queue_inodes_flusher(hammer_mount_t hmp, int waitfor)
 	info.waitfor = waitfor;
 	if (waitfor == MNT_WAIT) {
 		vmntvnodescan(hmp->mp, VMSC_GETVP|VMSC_ONEPASS,
-			      hammer_sync_scan1, hammer_sync_scan2, &info);
+			hammer_sync_scan1, hammer_sync_scan2, &info);
 	} else {
 		vmntvnodescan(hmp->mp, VMSC_GETVP|VMSC_ONEPASS|VMSC_NOWAIT,
-			      hammer_sync_scan1, hammer_sync_scan2, &info);
+			hammer_sync_scan1, hammer_sync_scan2, &info);
 	}
-	return(info.error);
+	return info.error;
 }
 
 /*
@@ -1533,20 +1544,20 @@ hammer_sync_hmp(hammer_mount_t hmp, int waitfor)
 	info.error = 0;
 	info.waitfor = MNT_NOWAIT;
 	vmntvnodescan(hmp->mp, VMSC_GETVP|VMSC_NOWAIT,
-		      hammer_sync_scan1, hammer_sync_scan2, &info);
+			hammer_sync_scan1, hammer_sync_scan2, &info);
 	if (info.error == 0 && waitfor == MNT_WAIT) {
 		info.waitfor = waitfor;
 		vmntvnodescan(hmp->mp, VMSC_GETVP,
-			      hammer_sync_scan1, hammer_sync_scan2, &info);
+				hammer_sync_scan1, hammer_sync_scan2, &info);
 	}
-        if (waitfor == MNT_WAIT) {
-                hammer_flusher_sync(hmp);
-                hammer_flusher_sync(hmp);
+	if (waitfor == MNT_WAIT) {
+		hammer_flusher_sync(hmp);
+		hammer_flusher_sync(hmp);
 	} else {
-                hammer_flusher_async(hmp, NULL);
-                hammer_flusher_async(hmp, NULL);
+		hammer_flusher_async(hmp, NULL);
+		hammer_flusher_async(hmp, NULL);
 	}
-	return(info.error);
+	return info.error;
 }
 
 static int
@@ -1556,11 +1567,11 @@ hammer_sync_scan1(struct mount *mp, struct vnode *vp, void *data)
 
 	ip = VTOI(vp);
 	if (vp->v_type == VNON || ip == NULL ||
-	    ((ip->flags & HAMMER_INODE_MODMASK) == 0 &&
-	     RB_EMPTY(&vp->v_rbdirty_tree))) {
-		return(-1);
+		((ip->flags & HAMMER_INODE_MODMASK) == 0 &&
+		RB_EMPTY(&vp->v_rbdirty_tree))) {
+		return -1;
 	}
-	return(0);
+	return 0;
 }
 
 static int
@@ -1572,13 +1583,13 @@ hammer_sync_scan2(struct mount *mp, struct vnode *vp, void *data)
 
 	ip = VTOI(vp);
 	if (vp->v_type == VNON || vp->v_type == VBAD ||
-	    ((ip->flags & HAMMER_INODE_MODMASK) == 0 &&
-	     RB_EMPTY(&vp->v_rbdirty_tree))) {
-		return(0);
+		((ip->flags & HAMMER_INODE_MODMASK) == 0 &&
+		RB_EMPTY(&vp->v_rbdirty_tree))) {
+		return 0;
 	}
 	error = VOP_FSYNC(vp, MNT_NOWAIT);
 	if (error)
 		info->error = error;
-	return(0);
+	return 0;
 }
 

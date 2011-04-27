@@ -62,13 +62,13 @@ hammer_ioc_rebalance(hammer_transaction_t trans, hammer_inode_t ip,
 
 	if ((rebal->key_beg.localization | rebal->key_end.localization) &
 	    HAMMER_LOCALIZE_PSEUDOFS_MASK) {
-		return(EINVAL);
+		return 22;
 	}
 	if (rebal->key_beg.localization > rebal->key_end.localization)
-		return(EINVAL);
+		return 22;
 	if (rebal->key_beg.localization == rebal->key_end.localization) {
 		if (rebal->key_beg.obj_id > rebal->key_end.obj_id)
-			return(EINVAL);
+			return 22;
 		/* key-space limitations - no check needed */
 	}
 	if (rebal->saturation < HAMMER_BTREE_INT_ELMS / 2)
@@ -200,8 +200,10 @@ retry:
 		/*
 		 * Iterate, stop if a signal was received.
 		 */
-		if ((error = hammer_signal_check(trans->hmp)) != 0)
+		if (hammer_signal_check(trans->hmp) != 0) {
+			error = hammer_signal_check(trans->hmp);
 			break;
+		}
 		error = hammer_btree_iterate(&cursor);
 	}
 	if (error == ENOENT)
@@ -218,7 +220,7 @@ retry:
 failed:
 	rebal->key_cur.localization &= HAMMER_LOCALIZE_MASK;
 	hammer_btree_lcache_free(trans->hmp, &lcache);
-	return(error);
+	return error;
 }
 
 /*
@@ -493,7 +495,7 @@ rebalance_node(struct hammer_ioc_rebalance *rebal, hammer_cursor_t cursor,
 done:
 	hammer_btree_unlock_children(cursor->trans->hmp, &lockroot, lcache);
 	hammer_cursor_downgrade(cursor);
-	return (error);
+	return error;
 }
 
 /*

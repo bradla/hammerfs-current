@@ -8,7 +8,7 @@
 #include "hammer.h"
 
 extern struct inode_operations hammerfs_inode_operations;
-extern struct file_operations hammerfs_file_operations;
+extern const struct file_operations hammerfs_file_operations;
 extern struct file_system_type hammerfs_type;
 extern struct super_operations hammerfs_super_operations;
 extern struct address_space_operations hammerfs_address_space_operations;

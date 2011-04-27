@@ -34,7 +34,7 @@
 
 #include "hammer.h"
 
-static __inline int validate_zone(hammer_off_t data_offset);
+static inline int validate_zone(hammer_off_t data_offset);
 
 int
 hammer_ioc_dedup(hammer_transaction_t trans, hammer_inode_t ip,
@@ -49,7 +49,7 @@ hammer_ioc_dedup(hammer_transaction_t trans, hammer_inode_t ip,
 	if (trans->hmp->version < HAMMER_VOL_VERSION_FIVE) {
 		kprintf("hammer: Filesystem must be upgraded to v5 "
 			"before you can run dedup\n");
-		return (EOPNOTSUPP);
+		return 95; /* EOPNOTSUPP */
 	}
 
 	/*
@@ -175,17 +175,17 @@ done_cursors:
 	hammer_done_cursor(&cursor2);
 done_cursor:
 	hammer_done_cursor(&cursor1);
-	return (error);
+	return error;
 }
 
-static __inline int
+static inline int
 validate_zone(hammer_off_t data_offset)
 {
-	switch(data_offset & HAMMER_OFF_ZONE_MASK) {
+	switch (data_offset & HAMMER_OFF_ZONE_MASK) {
 	case HAMMER_ZONE_LARGE_DATA:
 	case HAMMER_ZONE_SMALL_DATA:
-		return (0);
+		return 0;
 	default:
-		return (1);
+		return 1;
 	}
 }

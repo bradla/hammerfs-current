@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2007-2008 The DragonFly Project.  All rights reserved.
- * 
+ *
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,8 +30,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
- * $DragonFly: src/sys/vfs/hammer/hammer_transaction.c,v 1.25 2008/09/23 21:03:52 dillon Exp $
+ *
+ * $DragonFly: src/sys/vfs/hammer/hammer_transaction.c,
+ * v 1.25 2008/09/23 21:03:52 dillon Exp $
  */
 
 #include "hammer.h"
@@ -129,16 +130,16 @@ hammer_done_transaction(struct hammer_transaction *trans)
 	if (trans->type != HAMMER_TRANS_FLS) {
 		if (trans->flags & HAMMER_TRANSF_NEWINODE)
 			hammer_inode_waitreclaims(trans);
-	        /*
+	/*
 		else if (trans->flags & HAMMER_TRANSF_DIDIO)
 			hammer_inode_waithard(hmp);
-	        */
+	*/
 	}
 }
 
 /*
  * Allocate (count) TIDs.  If running in multi-master mode the returned
- * base will be aligned to a 16-count plus the master id (0-15).  
+ * base will be aligned to a 16-count plus the master id (0-15).
  * Multi-master mode allows non-conflicting to run and new objects to be
  * created on multiple masters in parallel.  The transaction id identifies
  * the original master.  The object_id is also subject to this rule in
@@ -171,7 +172,7 @@ hammer_alloc_tid(hammer_mount_t hmp, int count)
 		panic("hammer_start_transaction: Ran out of TIDs!");
 	if (hammer_debug_tid)
 		kprintf("alloc_tid %016llx\n", (long long)tid);
-	return(tid);
+	return tid;
 }
 
 /*
@@ -185,7 +186,7 @@ hammer_alloc_objid(hammer_mount_t hmp, hammer_inode_t dip, int64_t namekey)
 {
 	hammer_objid_cache_t ocp;
 	hammer_tid_t tid;
-        int incluster;
+	int incluster;
 	u_int32_t n;
 
 	while ((ocp = dip->objid_cache) == NULL) {
@@ -205,7 +206,7 @@ hammer_alloc_objid(hammer_mount_t hmp, hammer_inode_t dip, int64_t namekey)
 				ocp->dip = dip;
 			}
 		} else {
-        		/*
+			/*
 			 * Steal one from another directory?
 			 *
 			 * Throw away ocp's that are more then half full, they
@@ -224,11 +225,11 @@ hammer_alloc_objid(hammer_mount_t hmp, hammer_inode_t dip, int64_t namekey)
 		}
 	}
 	TAILQ_REMOVE(&hmp->objid_cache_list, ocp, entry);
-	
-        /*
-	 * Allocate a bit based on our namekey for the low bits of our
-	 * objid.
-	 */
+
+	/*
+	* Allocate a bit based on our namekey for the low bits of our
+	* objid.
+	*/
 	incluster = (hmp->master_id >= 0);
 	n = (namekey >> (63 - OBJID_CACHE_BULK_BITS)) & OBJID_CACHE_BULK_MASK;
 	n = ocp_allocbit(ocp, n);
@@ -247,10 +248,10 @@ hammer_alloc_objid(hammer_mount_t hmp, hammer_inode_t dip, int64_t namekey)
 		--hmp->objid_cache_count;
 		ocp->dip = NULL;
 		kfree(ocp, hmp->m_misc);
-	} else {
+	} else
 		TAILQ_INSERT_TAIL(&hmp->objid_cache_list, ocp, entry);
-	}
-	return(tid);
+
+	return tid;
 }
 
 /*
@@ -280,7 +281,7 @@ ocp_allocbit(hammer_objid_cache_t ocp, u_int32_t n)
 	ocp->bm1[n0] |= 1 << n;
 	if (ocp->bm1[n0] == 0xFFFFFFFFU)
 		ocp->bm0 |= 1 << n0;
-	return((n0 << 5) + n);
+	return (n0 << 5) + n;
 }
 
 void
@@ -288,7 +289,8 @@ hammer_clear_objid(hammer_inode_t dip)
 {
 	hammer_objid_cache_t ocp;
 
-	if ((ocp = dip->objid_cache) != NULL) {
+	if (dip->objid_cache != NULL) {
+		ocp = dip->objid_cache;
 		dip->objid_cache = NULL;
 		ocp->dip = NULL;
 		TAILQ_REMOVE(&dip->hmp->objid_cache_list, ocp, entry);
@@ -301,11 +303,11 @@ hammer_destroy_objid_cache(hammer_mount_t hmp)
 {
 	hammer_objid_cache_t ocp;
 
-	while ((ocp = TAILQ_FIRST(&hmp->objid_cache_list)) != NULL) {
+	while (TAILQ_FIRST(&hmp->objid_cache_list) != NULL) {
+		ocp = TAILQ_FIRST(&hmp->objid_cache_list);
 		TAILQ_REMOVE(&hmp->objid_cache_list, ocp, entry);
 		if (ocp->dip)
 			ocp->dip->objid_cache = NULL;
 		kfree(ocp, hmp->m_misc);
 	}
 }
-
