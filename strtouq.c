@@ -37,6 +37,11 @@
  * $DragonFly: src/sys/libkern/strtouq.c,v 1.2 2003/06/17 04:28:42 dillon Exp $
  */
 
+#include "dfly/sys/param.h"
+#include "dfly/sys/systm.h"
+#include "dfly/sys/ctype.h"
+#include "dfly/cpu/i386/include/limits.h"
+
 #include "hammer.h"
 /*
  * Convert a string to an unsigned quad integer.

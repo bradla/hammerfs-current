@@ -13,8 +13,12 @@
 #include "dfly_wrap.h"
 #include "hammer.h"
 
+struct inode *hammerfs_iget(struct super_block *sb, ino_t ino);
+int hammerfs_readpage(struct file *file, struct page *page);
+
 // corresponds to hammer_vfs_vget
-struct inode *hammerfs_iget(struct super_block *sb, ino_t ino) {
+struct inode *hammerfs_iget(struct super_block *sb, ino_t ino) 
+{
     struct hammer_transaction trans;
     struct hammer_mount *hmp = (void*)sb->s_fs_info;
     struct hammer_inode *ip;
@@ -117,7 +121,8 @@ int hammerfs_get_itype(char obj_type)
 }
 
 // corresponds to hammer_vop_strategy_read
-int hammerfs_readpage(struct file *file, struct page *page) {
+int hammerfs_readpage(struct file *file, struct page *page) 
+{
     void *page_addr;
     hammer_mount_t hmp;
     struct buffer_head *bh;

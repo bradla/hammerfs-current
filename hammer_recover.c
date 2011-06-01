@@ -115,6 +115,8 @@
 
 #include "hammer.h"
 
+void vput(struct vnode *vp);
+
 void
 vput(struct vnode *vp)
 {

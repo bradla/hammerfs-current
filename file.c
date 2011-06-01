@@ -14,6 +14,13 @@
 #include "dfly_wrap.h"
 #include "hammer.h"
 
+static int hammerfs_open(struct inode *, struct file *);
+int hammerfs_readdir(struct file *, void *, filldir_t);
+struct dentry *hammerfs_inode_lookup(struct inode *, struct dentry *,
+                                        struct nameidata *);
+int hammerfs_setattr(struct dentry *, struct iattr *);
+int hammerfs_getattr(struct vfsmount *, struct dentry *, struct kstat *);
+
 static int hammerfs_open(struct inode *inode, struct file *file)
 {
 	printk(KERN_INFO "hammerfs_open(node->i_ino=%lu)\n", inode->i_ino);
@@ -87,9 +94,9 @@ int hammerfs_readdir(struct file *file, void *dirent, filldir_t filldir)
 			base = &cursor.leaf->base;
 			KKASSERT(cursor.leaf->data_len > HAMMER_ENTRY_NAME_OFF);
 
-/*            if (base->obj_id != de->d_inode->i_ino)
-		panic("readdir: bad record at %p", cursor.node);
-*/
+		if (base->obj_id != de->d_inode->i_ino)
+			panic("readdir: bad record at %p", cursor.node);
+
 
        /*
 	* Convert pseudo-filesystems into softlinks
@@ -229,6 +236,7 @@ const struct file_operations hammerfs_file_operations = {
 	.aio_write = generic_file_aio_write,
 	.readdir = hammerfs_readdir
 };
+
 
 int hammerfs_setattr(struct dentry *dentry, struct iattr *iattr)
 {

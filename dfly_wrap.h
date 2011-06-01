@@ -1,8 +1,8 @@
 #ifndef _DFLY_WRAP_H
 #define _DFLY_WRAP_H
 
-/* 
- * Header file providing compability "glue" between 
+/*
+ * Header file providing compability "glue" between
  * DragonFly BSD and Linux: Contains mostly dummy
  * definitions and no-op functions.
  *
@@ -159,7 +159,7 @@ struct statfs {
 struct netexport {};
 struct export_args {};
 struct mount {
-    int mnt_flag;               /* flags shared with user */    
+    int mnt_flag;               /* flags shared with user */
     struct statfs   mnt_stat;               /* cache of Filesystem stats */
     struct statvfs  mnt_vstat;              /* extended stats */
 };
@@ -203,7 +203,7 @@ struct cdev {
         struct {
                 struct mount *__sid_mountpoint;
         } __si_disk;
-   } __si_u; 
+   } __si_u;
 };
 
 int count_udev (int x, int y);

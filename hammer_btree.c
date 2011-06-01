@@ -80,6 +80,8 @@
  * up the boundaries).
  */
 #include "hammer.h"
+#include "dfly/sys/buf.h"
+#include "dfly/sys/buf2.h"
 
 int hammer_debug_critical;
 int hammer_yield_check;

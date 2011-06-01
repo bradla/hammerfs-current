@@ -37,6 +37,9 @@
 
 #include "dfly_wrap.h"
 #include "hammer.h"
+#include "dfly/vm/vm_extern.h"
+#include "dfly/sys/buf.h"
+#include "dfly/sys/buf2.h"
 
 int hammer_limit_reclaim;
 
@@ -762,7 +765,6 @@ hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
 {
 	hammer_mount_t hmp;
 	hammer_inode_t ip;
-	uid_t xuid;
 	int error;
 	int64_t namekey;
 	u_int32_t dummy;
@@ -876,11 +878,11 @@ hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
 	 * the vap.
 	 */
 	if (dip) {
-		xuid = hammer_to_unix_xid(&dip->ino_data.uid);
-		/* xuid = vop_helper_create_uid(hmp->mp, dip->ino_data.mode,
+		/* xuid = hammer_to_unix_xid(&dip->ino_data.uid);
+		 xuid = vop_helper_create_uid(hmp->mp, dip->ino_data.mode,
 					     xuid, cred, &vap->va_mode); XXX */
 	} else {
-		xuid = 0;
+		/* xuid = 0; */
 	}
 	/*
 	ip->ino_data.mode = vap->va_mode;
@@ -1864,13 +1866,13 @@ static int
 hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 				  hammer_flush_group_t flg)
 {
-	hammer_mount_t hmp;
+	/* hammer_mount_t hmp; */
 	hammer_inode_t pip;
 	int good;
 
 	KKASSERT(record->flush_state != HAMMER_FST_IDLE);
 	pip = record->ip;
-	hmp = pip->hmp;
+	/* hmp = pip->hmp; */
 
 	/*
 	 * If the record is already flushing, is it in our flush group?
@@ -2381,9 +2383,8 @@ hammer_syncgrp_child_callback(hammer_record_t rec, void *data)
 void
 hammer_wait_inode(hammer_inode_t ip)
 {
-	hammer_flush_group_t flg;
+	/* hammer_flush_group_t flg; */
 
-	flg = NULL;
 	if ((ip->hmp->flags & HAMMER_MOUNT_CRITICAL_ERROR) == 0) {
 		while (ip->flush_state != HAMMER_FST_IDLE &&
 		       (ip->hmp->flags & HAMMER_MOUNT_CRITICAL_ERROR) == 0) {

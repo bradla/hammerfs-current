@@ -39,19 +39,19 @@
  */
 
 #include "hammer.h"
+#include <linux/types.h>
 
 int
 hammer_signal_check(hammer_mount_t hmp)
 {
-	int sig;
+	/* int sig; */
 
 	if (++hmp->check_interrupt < 100)
 		return 0;
 	hmp->check_interrupt = 0;
 
-	if (CURSIG(curthread->td_lwp) != 0) {
-		sig = CURSIG(curthread->td_lwp);
-		return 4; /* EINTR */
-	}
+	if (CURSIG(curthread->td_lwp) != 0)
+		return -EINTR; /* EINTR */
+		/* sig = CURSIG(curthread->td_lwp); */
 	return 0;
 }

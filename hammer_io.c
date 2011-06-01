@@ -55,6 +55,10 @@
 #include "dfly_wrap.h"
 
 #include "hammer.h"
+#include "dfly/sys/fcntl.h"
+#include "dfly/sys/nlookup.h"
+#include "dfly/sys/buf.h"
+#include "dfly/sys/buf2.h"
 
 int hammer_limit_running_io;
    
@@ -83,11 +87,13 @@ static void hammer_io_deallocate(struct buffer_head *bp);
 
 static void hammer_io_direct_read_complete(struct bio *nbio);
 
+/* 
 static void hammer_io_direct_write_complete(struct bio_vec *nbio);
+*/
 static int hammer_io_direct_uncache_callback(hammer_inode_t ip, void *data);
 static void hammer_io_set_modlist(struct hammer_io *io);
 static void hammer_io_flush_mark(hammer_volume_t volume);
-static void hammer_io_flush_sync_done(struct bio *bio);
+/* static void hammer_io_flush_sync_done(struct bio *bio); */
 
 /*
  * Initialize a new, already-zero'd hammer_io structure, or reinitialize
@@ -327,10 +333,8 @@ hammer_io_read(struct super_block *sb, struct hammer_io *io, int limit)
 {
 	struct buf *bp;
         int   error=0;
-        char *metatype=NULL;
+        /* char *metatype; */
         
-        metatype="asdf";
-
 	if ((bp = io->bp) == NULL) {
 	        ++hammer_count_io_locked;
 		/* atomic_add_int(&hammer_count_io_running_read, io->bytes); */
@@ -355,37 +359,35 @@ hammer_io_read(struct super_block *sb, struct hammer_io *io, int limit)
 		 */
 		bp = io->bp;
 		if ((hammer_debug_io & 0x0001) && (bp->b_flags & B_IODEBUG)) {
-			/* */
-
 			switch(io->type) {
 			case HAMMER_STRUCTURE_VOLUME:
-				metatype = "volume";
+				/* metatype = "volume"; XXX fix */
 				break;
 			case HAMMER_STRUCTURE_META_BUFFER:
 				switch(((struct hammer_buffer *)io)->
 					zoneX_offset & HAMMER_OFF_ZONE_MASK) {
 				case HAMMER_ZONE_BTREE:
-					metatype = "btree";
+					/* metatype = "btree"; */
 					break;
 				case HAMMER_ZONE_META:
-					metatype = "meta";
+					/* metatype = "meta"; */
 					break;
 				case HAMMER_ZONE_FREEMAP:
-					metatype = "freemap";
+					/* metatype = "freemap"; */
 					break;
 				default:
-					metatype = "meta?";
+					/* metatype = "meta?"; */
 					break;
 				}
 				break;
 			case HAMMER_STRUCTURE_DATA_BUFFER:
-				metatype = "data";
+				/* metatype = "data"; */
 				break;
 			case HAMMER_STRUCTURE_UNDO_BUFFER:
-				metatype = "undo";
+				/* metatype = "undo"; */
 				break;
 			default:
-				metatype = "unknown";
+				/* metatype = "unknown"; */
 				break;
 			}
 /* XXX			kprintf("doff %016jx %s\n",
@@ -990,14 +992,14 @@ hammer_modify_buffer_done(hammer_buffer_t buffer)
 void
 hammer_io_clear_modify(struct hammer_io *io, int inval)
 {
-	hammer_mount_t hmp;
+	/* hammer_mount_t hmp; */
 
 	/*
 	 * io_token is needed to avoid races on mod_list
 	 */
 	if (io->modified == 0)
 		return;
-	hmp = io->hmp;
+	/* hmp = io->hmp; */
 	crit_enter();
 	if (io->modified == 0) {
 		crit_exit();
@@ -1784,14 +1786,15 @@ hammer_io_direct_write(hammer_mount_t hmp, struct bio *bio,
  * NOTE: MPSAFE callback, only modify fields we have explicit
  *	 access to (the bp and the record->gflags).
  */
+/*
 static
 void
 hammer_io_direct_write_complete(struct bio_vec *nbio)
 {
 #if 0
-	/* not used struct bio *obio; */
+	* not used struct bio *obio; *
 	struct buf *bp;
-	hammer_record_t record = nbio->bv_page; // nbio->bio_caller_info1.ptr;
+	hammer_record_t record = nbio->bv_page; * nbio->bio_caller_info1.ptr; *
 	hammer_mount_t hmp;
 
 	KKASSERT(record != NULL);
@@ -1799,32 +1802,33 @@ hammer_io_direct_write_complete(struct bio_vec *nbio)
 
         crit_enter();
 
-	/* bp = nbio->bio_buf; */
-	/* XXX obio = pop_bio(nbio); */
+	bp = nbio->bio_buf;
+	obio = pop_bio(nbio);
 	if (bp->b_flags & B_ERROR) {
 		hammer_critical_error(hmp, record->ip,
 				      bp->b_error,
 				      "while writing bulk data");
 		bp->b_flags |= B_INVAL;
 	}
-	/* biodone(obio); */
+	biodone(obio); 
 
-/*	KKASSERT(record != NULL); */
+	KKASSERT(record != NULL); 
         KKASSERT(record->gflags & HAMMER_RECG_DIRECT_IO);
 	KKASSERT(record->flags & HAMMER_RECF_DIRECT_IO);
 	record->flags &= ~HAMMER_RECF_DIRECT_IO;
 	if (record->gflags & HAMMER_RECG_DIRECT_WAIT) {
 		record->gflags &= ~(HAMMER_RECG_DIRECT_IO |
 				    HAMMER_RECG_DIRECT_WAIT);
-		/* record can disappear once DIRECT_IO flag is cleared */
+		* record can disappear once DIRECT_IO flag is cleared *
 		wakeup(&record->flags);
 	} else {
 		record->gflags &= ~HAMMER_RECG_DIRECT_IO;
-		/* record can disappear once DIRECT_IO flag is cleared */
+		* record can disappear once DIRECT_IO flag is cleared *
 	}
 #endif 
         printk("hammer_io_direct_write_complete\n");
 }
+*/
 
 
 /*
@@ -1921,16 +1925,16 @@ hammer_io_direct_uncache_callback(hammer_inode_t ip, void *data)
    /* panic("hammer_io_direct_uncache_callback"); */
 
 	hammer_inode_info_t iinfo = data;
-	hammer_off_t data_offset;
-	hammer_off_t file_offset;
+	 /* hammer_off_t data_offset; 
+	hammer_off_t file_offset; */
 	struct vnode *vp;
 	/* struct buf *bp; */
 	int blksize;
 
 	if (ip->vp == NULL)
 		return(0);
-	data_offset = iinfo->u.leaf->data_offset;
-	file_offset = iinfo->u.leaf->base.key - iinfo->u.leaf->data_len;
+	/* data_offset = iinfo->u.leaf->data_offset;
+	file_offset = iinfo->u.leaf->base.key - iinfo->u.leaf->data_len; */
 	blksize = iinfo->u.leaf->data_len;
 	KKASSERT((blksize & HAMMER_BUFMASK) == 0);
 	
@@ -2022,6 +2026,7 @@ hammer_io_limit_backlog(hammer_mount_t hmp)
 /*
  * Callback to deal with completed flush commands to the device.
  */
+/*
 static void
 hammer_io_flush_sync_done(struct bio *bio)
 {
@@ -2029,8 +2034,8 @@ hammer_io_flush_sync_done(struct bio *bio)
 	struct buf *bp;
 #endif 
         printk("hammer_io_flush_sync_done");
-	/* bp = bio->bio_buf; */
-	/* XX bp->b_cmd = BUF_CMD_DONE; 
-	wakeup(&bp->b_cmd); */
+	bp = bio->bio_buf;
+	bp->b_cmd = BUF_CMD_DONE; 
+	wakeup(&bp->b_cmd);
 }
-
+*/

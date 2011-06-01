@@ -43,6 +43,10 @@
 #include "dfly_wrap.h"
 
 #include "hammer.h"
+#include "dfly/sys/fcntl.h"
+#include "dfly/sys/nlookup.h"
+#include "dfly/sys/buf.h"
+#include "dfly/sys/buf2.h"
 
 static void hammer_free_volume(hammer_volume_t volume);
 static int hammer_load_volume(hammer_volume_t volume);

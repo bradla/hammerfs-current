@@ -37,7 +37,9 @@
 #ifndef VFS_HAMMER_DISK_H_
 #define VFS_HAMMER_DISK_H_
 
-#include "uuid.h"
+#ifndef _SYS_UUID_H_
+#include "dfly/sys/uuid.h"
+#endif
 
 /*
  * The structures below represent the on-disk format for a HAMMER

@@ -468,7 +468,7 @@ int
 hammer_pfs_delete_at_cursor(hammer_cursor_t cursor, hammer_tid_t trunc_tid)
 {
 	hammer_btree_leaf_elm_t elm;
-	hammer_transaction_t trans;
+	/* hammer_transaction_t trans; */
 	int error;
 
 	elm = &cursor->node->ondisk->elms[cursor->index].leaf;
@@ -476,7 +476,7 @@ hammer_pfs_delete_at_cursor(hammer_cursor_t cursor, hammer_tid_t trunc_tid)
 	    elm->base.delete_tid < trunc_tid) {
 		return 0;
 	}
-	trans = cursor->trans;
+	/* trans = cursor->trans; */
 
 	if (elm->base.create_tid >= trunc_tid) {
 		error = hammer_delete_at_cursor(

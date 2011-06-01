@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2008 The DragonFly Project.  All rights reserved.
- * 
+ *
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,8 +30,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
- * $DragonFly: src/sys/vfs/hammer/hammer_mirror.c,v 1.17 2008/07/31 22:30:33 dillon Exp $
+ *
+ * $DragonFly: src/sys/vfs/hammer/hammer_mirror.c,
+ * v 1.17 2008/07/31 22:30:33 dillon Exp $
  */
 /*
  * HAMMER mirroring ioctls - serialize and deserialize modifications made
@@ -39,6 +40,7 @@
  */
 
 #include "hammer.h"
+#include <linux/types.h>
 
 static int hammer_mirror_check(hammer_cursor_t cursor,
 				struct hammer_ioc_mrecord_rec *mrec);
@@ -61,7 +63,7 @@ static int hammer_ioc_mirror_write_skip(hammer_cursor_t cursor,
 				struct hammer_ioc_mirror_rw *mirror,
 				u_int32_t localization);
 static int hammer_mirror_delete_to(hammer_cursor_t cursor,
-			        struct hammer_ioc_mirror_rw *mirror);
+				struct hammer_ioc_mirror_rw *mirror);
 static int hammer_mirror_localize_data(hammer_data_ondisk_t data,
 				hammer_btree_leaf_elm_t leaf);
 
@@ -96,10 +98,10 @@ hammer_ioc_mirror_read(hammer_transaction_t trans, hammer_inode_t ip,
 
 	if ((mirror->key_beg.localization | mirror->key_end.localization) &
 	    HAMMER_LOCALIZE_PSEUDOFS_MASK) {
-		return(EINVAL);
+		return -EINVAL;
 	}
 	if (hammer_btree_cmp(&mirror->key_beg, &mirror->key_end) > 0)
-		return(EINVAL);
+		return -EINVAL;
 
 	mirror->key_cur = mirror->key_beg;
 	mirror->key_cur.localization &= HAMMER_LOCALIZE_MASK;
@@ -219,7 +221,7 @@ retry:
 			error = copyout(&mrec, uptr, bytes);
 			eatdisk = 1;
 			goto didwrite;
-			
+
 		}
 
 		/*
@@ -292,7 +294,7 @@ didwrite:
 	}
 failed:
 	mirror->key_cur.localization &= HAMMER_LOCALIZE_MASK;
-	return(error);
+	return error;
 }
 
 /*
@@ -323,7 +325,7 @@ hammer_ioc_mirror_write(hammer_transaction_t trans, hammer_inode_t ip,
 	 * Validate the mirror structure and relocalize the tracking keys.
 	 */
 	if (mirror->size < 0 || mirror->size > 0x70000000)
-		return(EINVAL);
+		return -EINVAL;
 	mirror->key_beg.localization &= HAMMER_LOCALIZE_MASK;
 	mirror->key_beg.localization += localization;
 	mirror->key_end.localization &= HAMMER_LOCALIZE_MASK;
@@ -353,7 +355,7 @@ hammer_ioc_mirror_write(hammer_transaction_t trans, hammer_inode_t ip,
 	while (error == 0 &&
 		mirror->count + sizeof(mrec.head) <= mirror->size) {
 
-	        /*
+		/*
 		 * Don't blow out the buffer cache.  Leave room for frontend
 		 * cache as well.
 		 */
@@ -384,7 +386,8 @@ hammer_ioc_mirror_write(hammer_transaction_t trans, hammer_inode_t ip,
 		/*
 		 * Acquire and validate header
 		 */
-		if ((bytes = mirror->size - mirror->count) > sizeof(mrec))
+		bytes = mirror->size - mirror->count;
+		if (bytes > sizeof(mrec))
 			bytes = sizeof(mrec);
 		uptr = (char *)mirror->ubuf + mirror->count;
 		error = copyin(uptr, &mrec, bytes);
@@ -401,24 +404,31 @@ hammer_ioc_mirror_write(hammer_transaction_t trans, hammer_inode_t ip,
 			break;
 		}
 
-		switch(mrec.head.type) {
+		switch (mrec.head.type) {
 		case HAMMER_MREC_TYPE_SKIP:
 			if (mrec.head.rec_size != sizeof(mrec.skip))
 				error = EINVAL;
 			if (error == 0)
-				error = hammer_ioc_mirror_write_skip(&cursor, &mrec.skip, mirror, localization);
+				error = hammer_ioc_mirror_write_skip(&cursor,
+						&mrec.skip, mirror,
+						localization);
 			break;
 		case HAMMER_MREC_TYPE_REC:
 			if (mrec.head.rec_size < sizeof(mrec.rec))
 				error = EINVAL;
 			if (error == 0)
-				error = hammer_ioc_mirror_write_rec(&cursor, &mrec.rec, mirror, localization, uptr + sizeof(mrec.rec));
+				error = hammer_ioc_mirror_write_rec(&cursor,
+						&mrec.rec, mirror,
+						localization,
+						uptr + sizeof(mrec.rec));
 			break;
 		case HAMMER_MREC_TYPE_PASS:
 			if (mrec.head.rec_size != sizeof(mrec.rec))
 				error = EINVAL;
 			if (error == 0)
-				error = hammer_ioc_mirror_write_pass(&cursor, &mrec.rec, mirror, localization);
+				error = hammer_ioc_mirror_write_pass(&cursor,
+						&mrec.rec, mirror,
+						localization);
 			break;
 		default:
 			error = EINVAL;
@@ -438,7 +448,7 @@ hammer_ioc_mirror_write(hammer_transaction_t trans, hammer_inode_t ip,
 			if (error == EALREADY)
 				error = 0;
 			if (error == 0) {
-				mirror->count += 
+				mirror->count +=
 					HAMMER_HEAD_DOALIGN(mrec.head.rec_size);
 			}
 		}
@@ -446,7 +456,7 @@ hammer_ioc_mirror_write(hammer_transaction_t trans, hammer_inode_t ip,
 	hammer_done_cursor(&cursor);
 
 	/*
-	 * cumulative error 
+	 * cumulative error
 	 */
 	if (error) {
 		mirror->head.flags |= HAMMER_IOC_HEAD_ERROR;
@@ -457,7 +467,7 @@ hammer_ioc_mirror_write(hammer_transaction_t trans, hammer_inode_t ip,
 	 * ioctls don't update the RW data structure if an error is returned,
 	 * always return 0.
 	 */
-	return(0);
+	return 0;
 }
 
 /*
@@ -510,7 +520,7 @@ hammer_ioc_mirror_write_skip(hammer_cursor_t cursor,
 		if (error == ENOENT)
 			error = 0;
 	}
-	return(error);
+	return error;
 }
 
 /*
@@ -530,17 +540,15 @@ hammer_ioc_mirror_write_rec(hammer_cursor_t cursor,
 			    u_int32_t localization,
 			    char *uptr)
 {
-	hammer_transaction_t trans;
-	u_int32_t rec_crc;
 	int error;
 
-	trans = cursor->trans;
-	rec_crc = crc32(mrec, sizeof(*mrec));
+	/* trans = cursor->trans; */
+	/* rec_crc = crc32(mrec, sizeof(*mrec)); */
 
-	if (mrec->leaf.data_len < 0 || 
+	if (mrec->leaf.data_len < 0 ||
 	    mrec->leaf.data_len > HAMMER_XBUFSIZE ||
 	    mrec->leaf.data_len + sizeof(*mrec) > mrec->head.rec_size) {
-		return(EINVAL);
+		return -EINVAL;
 	}
 
 	/*
@@ -589,7 +597,7 @@ hammer_ioc_mirror_write_rec(hammer_cursor_t cursor,
 	}
 	if (error == 0 || error == EALREADY)
 		mirror->key_cur = mrec->leaf.base;
-	return(error);
+	return error;
 }
 
 /*
@@ -611,12 +619,8 @@ hammer_ioc_mirror_write_pass(hammer_cursor_t cursor,
 			     struct hammer_ioc_mirror_rw *mirror,
 			     u_int32_t localization)
 {
-	hammer_transaction_t trans;
-	u_int32_t rec_crc;
 	int error;
 
-	trans = cursor->trans;
-	rec_crc = crc32(mrec, sizeof(*mrec));
 
 	/*
 	 * Re-localize for target.  Relocalization of data is handled
@@ -656,7 +660,7 @@ hammer_ioc_mirror_write_pass(hammer_cursor_t cursor,
 		if (error == ENOENT)
 			error = 0;
 	}
-	return(error);
+	return error;
 }
 
 /*
@@ -692,7 +696,7 @@ hammer_mirror_delete_to(hammer_cursor_t cursor,
 	}
 	if (error == ENOENT)
 		error = 0;
-	return(error);
+	return error;
 }
 
 /*
@@ -710,9 +714,9 @@ hammer_mirror_check(hammer_cursor_t cursor, struct hammer_ioc_mrecord_rec *mrec)
 
 	if (leaf->base.delete_tid != mrec->leaf.base.delete_tid) {
 		if (mrec->leaf.base.delete_tid != 0)
-			return(1);
+			return 1;
 	}
-	return(0);
+	return 0;
 }
 
 /*
@@ -730,7 +734,7 @@ hammer_mirror_update(hammer_cursor_t cursor,
 	 * This case shouldn't occur.
 	 */
 	if (mrec->leaf.base.delete_tid == 0)
-		return(0);
+		return 0;
 
 	/*
 	 * Mark the record deleted on the mirror target.
@@ -740,7 +744,7 @@ hammer_mirror_update(hammer_cursor_t cursor,
 					mrec->leaf.delete_ts,
 					1, NULL);
 	cursor->flags |= HAMMER_CURSOR_ATEDISK;
-	return(error);
+	return error;
 }
 
 /*
@@ -777,7 +781,7 @@ hammer_mirror_write(hammer_cursor_t cursor,
 					  &ndata_offset, &data_buffer,
 					  0, &error);
 		if (ndata == NULL)
-			return(error);
+			return error;
 		mrec->leaf.data_offset = ndata_offset;
 		hammer_modify_buffer(trans, data_buffer, NULL, 0);
 		error = copyin(udata, ndata, mrec->leaf.data_len);
@@ -859,7 +863,7 @@ failed:
 	hammer_sync_unlock(trans);
 	if (data_buffer)
 		hammer_rel_buffer(data_buffer, 0);
-	return(error);
+	return error;
 }
 
 /*
@@ -877,7 +881,7 @@ hammer_mirror_localize_data(hammer_data_ondisk_t data,
 
 	if (leaf->base.rec_type == HAMMER_RECTYPE_DIRENTRY) {
 		if (data->entry.obj_id == HAMMER_OBJID_ROOT)
-			return(EALREADY);
+			return -EALREADY;
 		localization = leaf->base.localization &
 			       HAMMER_LOCALIZE_PSEUDOFS_MASK;
 		if (data->entry.localization != localization) {
@@ -885,6 +889,5 @@ hammer_mirror_localize_data(hammer_data_ondisk_t data,
 			hammer_crc_set_leaf(data, leaf);
 		}
 	}
-	return(0);
+	return 0;
 }
-

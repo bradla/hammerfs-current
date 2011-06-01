@@ -186,7 +186,7 @@ hammer_alloc_objid(hammer_mount_t hmp, hammer_inode_t dip, int64_t namekey)
 {
 	hammer_objid_cache_t ocp;
 	hammer_tid_t tid;
-	int incluster;
+	/* int incluster; */
 	u_int32_t n;
 
 	while ((ocp = dip->objid_cache) == NULL) {
@@ -230,7 +230,7 @@ hammer_alloc_objid(hammer_mount_t hmp, hammer_inode_t dip, int64_t namekey)
 	* Allocate a bit based on our namekey for the low bits of our
 	* objid.
 	*/
-	incluster = (hmp->master_id >= 0);
+	/* incluster = (hmp->master_id >= 0); XXX ??? */
 	n = (namekey >> (63 - OBJID_CACHE_BULK_BITS)) & OBJID_CACHE_BULK_MASK;
 	n = ocp_allocbit(ocp, n);
 	tid = ocp->base_tid + n;

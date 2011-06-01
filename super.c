@@ -71,8 +71,16 @@ int64_t hammer_contention_count;
 int64_t hammer_zone_limit;
 
 static int hammerfs_install_volume(struct hammer_mount *hmp,
-									struct super_block *sb);
+					struct super_block *sb);
 struct inode *hammerfs_iget(struct super_block *sb, ino_t ino);
+static struct dentry *hammerfs_mount(struct file_system_type *fs_type,
+        		   	int flags, const char *, void *);
+
+extern int get_sb_bdev(struct file_system_type *fs_type,
+        int flags, const char *dev_name, void *data,
+        int (*fill_super)(struct super_block *, void *, int),
+        struct vfsmount *mnt);
+int hammerfs_statfs(struct dentry *, struct kstatfs *);
 
 /* corresponds to hammer_vfs_mount */
 static int
@@ -245,7 +253,7 @@ hammerfs_install_volume(struct hammer_mount *hmp, struct super_block *sb)
 		printk(KERN_ERR "hammer_mount: volume %s has an invalid header\n",
 			volume->vol_name);
 		error = -EINVAL;
-		goto failed;
+/*		goto failed; */
 	}
 
 	volume->ondisk = ondisk;
@@ -305,11 +313,12 @@ hammer_critical_error(hammer_mount_t hmp, hammer_inode_t ip,
 	hmp->error = error;
 }
 
-int hammerfs_get_sb(struct file_system_type *fs_type,
-	int flags, const char *dev_name, void *data, struct vfsmount *mnt)
+static struct dentry *hammerfs_mount(struct file_system_type *fs_type,
+	int flags, const char *dev_name, void *data)
 {
-	return get_sb_bdev(fs_type, flags, dev_name, data,
-				hammerfs_fill_super, mnt);
+	/* return get_sb_bdev(fs_type, flags, dev_name, data, */
+	return mount_bdev(fs_type, flags, dev_name, data,
+				hammerfs_fill_super);
 }
 
 int hammerfs_statfs(struct dentry *dentry, struct kstatfs *kstatfs)
@@ -320,7 +329,8 @@ int hammerfs_statfs(struct dentry *dentry, struct kstatfs *kstatfs)
 struct file_system_type hammerfs_type = {
 	.owner    = THIS_MODULE,
 	.name     = "hammer",
-	.get_sb   = hammerfs_get_sb,
+/*	.get_sb   = hammerfs_get_sb, */
+        .mount    = hammerfs_mount,
 	.kill_sb  = kill_anon_super,
 	.fs_flags = FS_REQUIRES_DEV
 };

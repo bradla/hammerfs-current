@@ -281,7 +281,7 @@ hammer_flusher_flush(hammer_mount_t hmp)
 	hammer_reserve_t resv;
 	hammer_inode_t ip;
 	hammer_inode_t next_ip;
-	int slave_index;
+	/* int slave_index; */
 	int count;
 
 	/*
@@ -326,7 +326,7 @@ hammer_flusher_flush(hammer_mount_t hmp)
 		 * Iterate the inodes in the flg's flush_tree and assign
 		 * them to slaves.
 		 */
-		slave_index = 0;
+		/* slave_index = 0; */
 		info = TAILQ_FIRST(&hmp->flusher.ready_list);
 		next_ip = RB_FIRST(hammer_fls_rb_tree, &flg->flush_tree);
 
@@ -433,7 +433,7 @@ hammer_flusher_flush(hammer_mount_t hmp)
 static void
 hammer_flusher_slave_thread(void *arg)
 {
-	hammer_flush_group_t flg;
+	/* hammer_flush_group_t flg; */
 	struct hammer_flusher_info *info;
 	hammer_mount_t hmp;
 	hammer_inode_t ip;
@@ -447,7 +447,7 @@ hammer_flusher_slave_thread(void *arg)
 			tsleep(&info->runstate, 0, "hmrssw", 0);
 		if (info->runstate < 0)
 			break;
-		flg = info->flg;
+		/* flg = info->flg; */
 
 		for (i = 0; i < info->count; ++i) {
 			ip = info->work_array[i];

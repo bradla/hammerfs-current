@@ -372,7 +372,7 @@ hammer_rel_mem_record(struct hammer_record *record)
 	hammer_mount_t hmp;
 	hammer_reserve_t resv;
 	hammer_inode_t ip;
-	hammer_inode_t target_ip;
+	hammer_inode_t target_ip = NULL;
 	int diddrop;
 
 	hammer_rel(&record->lock);
@@ -2249,12 +2249,12 @@ hammer_ip_delete_record(hammer_cursor_t cursor, hammer_inode_t ip,
 			hammer_tid_t tid)
 {
 	hammer_record_t iprec;
-	hammer_mount_t hmp;
+	/* hammer_mount_t hmp; */
 	int error;
 
 	KKASSERT(cursor->flags & HAMMER_CURSOR_BACKEND);
 	KKASSERT(tid != 0);
-	hmp = cursor->node->hmp;
+	/* hmp = cursor->node->hmp; XXX ??? */
 
 	/*
 	 * In-memory (unsynchronized) records can simply be freed.  This
@@ -2480,7 +2480,7 @@ hammer_delete_at_cursor(hammer_cursor_t cursor, int delete_flags,
 	hammer_btree_elm_t elm;
 	hammer_off_t data_offset;
 	int32_t data_len;
-	u_int16_t rec_type;
+	/* u_int16_t rec_type; */
 	int error;
 	int icount;
 	int doprop;
@@ -2559,7 +2559,7 @@ hammer_delete_at_cursor(hammer_cursor_t cursor, int delete_flags,
 	if (delete_flags & HAMMER_DELETE_DESTROY) {
 		data_offset = elm->leaf.data_offset;
 		data_len = elm->leaf.data_len;
-		rec_type = elm->leaf.base.rec_type;
+		/* rec_type = elm->leaf.base.rec_type; */
 		if (doprop) {
 			save_leaf = elm->leaf;
 			leaf = &save_leaf;

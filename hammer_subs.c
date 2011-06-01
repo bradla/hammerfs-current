@@ -39,6 +39,7 @@
  */
 
 #include "hammer.h"
+#include "dfly/sys/dirent.h"
 
 #define PINTERLOCKED    0x00000400      /* Interlocked tsleep */
 
@@ -714,12 +715,12 @@ int
 hammer_try_interlock_norefs(struct hammer_lock *lock)
 {
 	u_int lv = 0;
-	u_int nlv = 0;
+	/* u_int nlv = 0; */
 
 	for (;;) {
 		lv = lock->refs;
 		if (lv == 0) {
-			nlv = lv | HAMMER_REFS_LOCKED;
+			/* nlv = lv | HAMMER_REFS_LOCKED; XXX */
 			/* if (atomic_cmpset_int(&lock->refs, lv, nlv)) {
 				lock->rowner = curthread;
 				return 1);

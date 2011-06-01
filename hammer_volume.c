@@ -40,6 +40,10 @@
 #include "dfly_wrap.h"
 
 #include "hammer.h"
+#include "dfly/sys/fcntl.h"
+#include "dfly/sys/nlookup.h"
+#include "dfly/sys/buf.h"
+#include "dfly/sys/buf2.h"
 
 /*#include <sys/fcntl.h>
 #include <sys/nlookup.h>

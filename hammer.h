@@ -44,17 +44,27 @@
 #include <linux/buffer_head.h> // for sb_bread
 
 #include "dfly_wrap.h"
-#include "tree.h"
 
+#include "dfly/sys/conf.h"
+#include "dfly/sys/systm.h"
+#include "dfly/sys/tree.h"
+#include "dfly/sys/mountctl.h"
+#include "dfly/sys/vnode.h"
+#include "dfly/sys/proc.h"
+#include "dfly/sys/priv.h"
+#include "dfly/sys/globaldata.h"
+#include "dfly/sys/lockf.h"
+#include "dfly/sys/buf.h"
+#include "dfly/sys/ktr.h"
+#include "dfly/sys/buf2.h"
+#include "dfly/sys/signal2.h"
 #include <asm/param.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/vmalloc.h>
 #include <linux/mount.h>
 #include <linux/stat.h>
-#include "lockf.h"
-#include "queue.h"
-
+#include "dfly/sys/queue.h"
 #include "hammer_disk.h"
 #include "hammer_mount.h"
 #include "hammer_ioctl.h"

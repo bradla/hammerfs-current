@@ -35,10 +35,10 @@
  */
 
 #ifndef _SYS_TYPES_H_
-//#include "dfly/sys/types.h"
+#include "dfly/sys/types.h"
 #endif
 #ifndef _SYS_MOUNT_H_
-//#include "dfly/sys/mount.h"
+#include "dfly/sys/mount.h"
 #endif
 
 /*
