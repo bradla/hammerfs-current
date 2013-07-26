@@ -66,7 +66,8 @@ int hammerfs_get_inode(struct super_block *sb,
     (*inode)->i_ino = ip->ino_leaf.base.obj_id;
     (*inode)->i_uid = hammer_to_unix_xid(&ip->ino_data.uid);
     (*inode)->i_gid = hammer_to_unix_xid(&ip->ino_data.gid);
-    (*inode)->i_nlink = ip->ino_data.nlinks;
+    /* XXX (*inode)->i_nlink = ip->ino_data.nlinks;
+*/
     (*inode)->i_size = ip->ino_data.size;
     (*inode)->i_mode = ip->ino_data.mode | hammerfs_get_itype(ip->ino_data.obj_type);
     (*inode)->i_private = ip;

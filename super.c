@@ -196,7 +196,8 @@ hammerfs_fill_super(struct super_block *sb, void *data, int silent)
 		goto failed;
 	}
 
-	sb->s_root = d_alloc_root(root);
+	/* XXX sb->s_root = d_alloc_root(root);
+*/
 	if (!sb->s_root) {
 		printk(KERN_ERR "HAMMER: get root dentry failed\n");
 		iput(root);
