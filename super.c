@@ -54,13 +54,14 @@ int64_t hammer_stats_disk_write;
 int64_t hammer_stats_inode_flushes;
 int64_t hammer_stats_commits;
 
-int hammer_count_dirtybufspace;     /* global */
-int hammer_count_refedbufs;     /* global */
+/* int hammer_count_dirtybufspace; */     /* global */
+atomic_t hammer_count_refedbufs;     /* global */
 int hammer_count_reservations;
-int hammer_count_io_running_read;
+/* int hammer_count_io_running_read;
 int hammer_count_io_running_write;
-int hammer_count_io_locked;
-int hammer_limit_dirtybufspace;     /* per-mount */
+*/
+atomic_t hammer_count_io_locked;
+/* int hammer_limit_dirtybufspace;*/     /* per-mount */
 int hammer_limit_recs;          /* as a whole XXX */
 int hammer_autoflush = 2000;        /* auto flush */
 int hammer_bio_count;
@@ -148,12 +149,13 @@ hammerfs_fill_super(struct super_block *sb, void *data, int silent)
 	RB_INIT(&hmp->rb_pfsm_root);
 
 	hmp->ronly = 1;
-
+/*
 	TAILQ_INIT(&hmp->volu_list);
 	TAILQ_INIT(&hmp->undo_list);
 	TAILQ_INIT(&hmp->data_list);
 	TAILQ_INIT(&hmp->meta_list);
 	TAILQ_INIT(&hmp->lose_list);
+*/
 
 	/*
 	* Load volumes

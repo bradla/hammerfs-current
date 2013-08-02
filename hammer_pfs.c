@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2008 The DragonFly Project.  All rights reserved.
- *
+ * 
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- *
+ * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- *
+ * 
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,9 +30,6 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $DragonFly: src/sys/vfs/hammer/hammer_pfs.c,
- * v 1.5 2008/07/31 04:42:04 dillon Exp $
  */
 /*
  * HAMMER PFS ioctls - Manage pseudo-fs configurations
@@ -61,10 +58,8 @@ hammer_ioc_get_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 	u_int32_t localization;
 	int error;
 
-	if (hammer_pfs_autodetect(pfs, ip) != 0) {
-		error = hammer_pfs_autodetect(pfs, ip);
-		return error;
-	}
+	if ((error = hammer_pfs_autodetect(pfs, ip)) != 0)
+		return(error);
 	localization = (u_int32_t)pfs->pfs_id << 16;
 	pfs->bytes = sizeof(struct hammer_pseudofs_data);
 	pfs->version = HAMMER_IOC_PSEUDOFS_VERSION;
@@ -72,7 +67,7 @@ hammer_ioc_get_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 	pfsm = hammer_load_pseudofs(trans, localization, &error);
 	if (error) {
 		hammer_rel_pseudofs(trans->hmp, pfsm);
-		return error;
+		return(error);
 	}
 
 	/*
@@ -94,7 +89,7 @@ hammer_ioc_get_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 	if (pfs->ondisk && error == 0)
 		error = copyout(&pfsm->pfsd, pfs->ondisk, sizeof(pfsm->pfsd));
 	hammer_rel_pseudofs(trans->hmp, pfsm);
-	return error;
+	return(error);
 }
 
 /*
@@ -110,10 +105,8 @@ hammer_ioc_set_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 	u_int32_t localization;
 	int error;
 
-	if (hammer_pfs_autodetect(pfs, ip) != 0) {
-		error = hammer_pfs_autodetect(pfs, ip);
-		return error;
-	}
+	if ((error = hammer_pfs_autodetect(pfs, ip)) != 0)
+		return(error);
 	localization = (u_int32_t)pfs->pfs_id << 16;
 	if (pfs->version != HAMMER_IOC_PSEUDOFS_VERSION)
 		error = EINVAL;
@@ -147,7 +140,7 @@ hammer_ioc_set_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 		wakeup(&pfsm->pfsd.sync_end_tid);
 		hammer_rel_pseudofs(trans->hmp, pfsm);
 	}
-	return error;
+	return(error);
 }
 
 /*
@@ -167,15 +160,12 @@ hammer_ioc_upgrade_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 	u_int32_t localization;
 	int error;
 
-	if (hammer_pfs_autodetect(pfs, ip) != 0) {
-		error = hammer_pfs_autodetect(pfs, ip);
-		return error;
-	}
+	if ((error = hammer_pfs_autodetect(pfs, ip)) != 0)
+		return(error);
 	localization = (u_int32_t)pfs->pfs_id << 16;
-	if (hammer_unload_pseudofs(trans, localization) != 0) {
-		error = hammer_unload_pseudofs(trans, localization);
-		return error;
-	}
+	if ((error = hammer_unload_pseudofs(trans, localization)) != 0)
+		return(error);
+
 	/*
 	 * A master id must be set when upgrading
 	 */
@@ -195,7 +185,7 @@ hammer_ioc_upgrade_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 		pfs->head.flags |= HAMMER_IOC_HEAD_INTR;
 		error = 0;
 	}
-	return error;
+	return (error);
 }
 
 /*
@@ -219,15 +209,11 @@ hammer_ioc_downgrade_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 	u_int32_t localization;
 	int error;
 
-	if (hammer_pfs_autodetect(pfs, ip) != 0) {
-		error = hammer_pfs_autodetect(pfs, ip);
-		return error;
-	}
+	if ((error = hammer_pfs_autodetect(pfs, ip)) != 0)
+		return(error);
 	localization = (u_int32_t)pfs->pfs_id << 16;
-	if (hammer_unload_pseudofs(trans, localization) != 0) {
-		error = hammer_unload_pseudofs(trans, localization);
-		return error;
-	}
+	if ((error = hammer_unload_pseudofs(trans, localization)) != 0)
+		return(error);
 
 	pfsm = hammer_load_pseudofs(trans, localization, &error);
 	if (error == 0) {
@@ -239,7 +225,7 @@ hammer_ioc_downgrade_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 		}
 	}
 	hammer_rel_pseudofs(trans->hmp, pfsm);
-	return error;
+	return (error);
 }
 
 /*
@@ -259,16 +245,12 @@ hammer_ioc_destroy_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 	u_int32_t localization;
 	int error;
 
-	if (hammer_pfs_autodetect(pfs, ip) != 0) {
-		error = hammer_pfs_autodetect(pfs, ip);
-		return error;
-	}
+	if ((error = hammer_pfs_autodetect(pfs, ip)) != 0)
+		return(error);
 	localization = (u_int32_t)pfs->pfs_id << 16;
 
-	if (hammer_unload_pseudofs(trans, localization) != 0) {
-		error = hammer_unload_pseudofs(trans, localization);
-		return error;
-	}
+	if ((error = hammer_unload_pseudofs(trans, localization)) != 0)
+		return(error);
 
 	pfsm = hammer_load_pseudofs(trans, localization, &error);
 	if (error == 0) {
@@ -283,7 +265,7 @@ hammer_ioc_destroy_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 		pfs->head.flags |= HAMMER_IOC_HEAD_INTR;
 		error = 0;
 	}
-	return error;
+	return(error);
 }
 
 /*
@@ -300,16 +282,12 @@ hammer_ioc_wait_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 	void *waitp;
 	int error;
 
-	if (hammer_pfs_autodetect(pfs, ip) != 0) {
-		error = hammer_pfs_autodetect(pfs, ip);
-		return error;
-	}
+	if ((error = hammer_pfs_autodetect(pfs, ip)) != 0)
+		return(error);
 	localization = (u_int32_t)pfs->pfs_id << 16;
 
-	if (copyin(pfs->ondisk, &pfsd, sizeof(pfsd)) != 0) {
-		error = copyin(pfs->ondisk, &pfsd, sizeof(pfsd));
-		return error;
-	}
+	if ((error = copyin(pfs->ondisk, &pfsd, sizeof(pfsd))) != 0)
+		return(error);
 
 	pfsm = hammer_load_pseudofs(trans, localization, &error);
 	if (error == 0) {
@@ -328,7 +306,7 @@ hammer_ioc_wait_pseudofs(hammer_transaction_t trans, hammer_inode_t ip,
 		pfs->head.flags |= HAMMER_IOC_HEAD_INTR;
 		error = 0;
 	}
-	return error;
+	return(error);
 }
 
 
@@ -347,7 +325,7 @@ hammer_pfs_autodetect(struct hammer_ioc_pseudofs_rw *pfs, hammer_inode_t ip)
 		error = EINVAL;
 	if (pfs->bytes < sizeof(struct hammer_pseudofs_data))
 		error = EINVAL;
-	return error;
+	return(error);
 }
 
 /*
@@ -384,7 +362,7 @@ hammer_pfs_rollback(hammer_transaction_t trans,
 	key_cur.create_tid = 1;
 	key_cur.rec_type = HAMMER_MIN_RECTYPE;
 
-	seq = trans->hmp->flusher.act;
+	seq = trans->hmp->flusher.done;
 
 retry:
 	error = hammer_init_cursor(trans, &cursor, NULL, NULL);
@@ -454,7 +432,7 @@ retry:
 	if (error == EDEADLK)
 		goto retry;
 failed:
-	return error;
+	return(error);
 }
 
 /*
@@ -468,15 +446,13 @@ int
 hammer_pfs_delete_at_cursor(hammer_cursor_t cursor, hammer_tid_t trunc_tid)
 {
 	hammer_btree_leaf_elm_t elm;
-	/* hammer_transaction_t trans; */
 	int error;
 
 	elm = &cursor->node->ondisk->elms[cursor->index].leaf;
 	if (elm->base.create_tid < trunc_tid &&
 	    elm->base.delete_tid < trunc_tid) {
-		return 0;
+		return(0);
 	}
-	/* trans = cursor->trans; */
 
 	if (elm->base.create_tid >= trunc_tid) {
 		error = hammer_delete_at_cursor(
@@ -491,5 +467,6 @@ hammer_pfs_delete_at_cursor(hammer_cursor_t cursor, hammer_tid_t trunc_tid)
 	} else {
 		error = 0;
 	}
-	return error;
+	return(error);
 }
+

@@ -3,6 +3,6 @@ This is a port of the current DragonFlyBSD HammerFS code.
 This is not for production systems and only use it if you know
 what you are doing. 
 
-I don't have all the userland finished porting yet maybe Friday.
+Does not compile yet only some files compile without errors.
 
-The file should compile clean for the most part the other left the way they are for a reason
+Next I will attempt to add the missing DragonflyBSD bits to linux.

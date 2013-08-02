@@ -108,7 +108,7 @@
  * to be 64-byte aligned.
  */
 typedef u_int64_t hammer_tid_t;
-typedef u_int64_t hammer_off_t;
+typedef unsigned long long hammer_off_t;
 typedef u_int32_t hammer_seq_t;
 typedef u_int32_t hammer_crc_t;
 

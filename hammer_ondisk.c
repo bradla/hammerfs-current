@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2007-2008 The DragonFly Project.  All rights reserved.
- *
+ * 
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- *
+ * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- *
+ * 
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,9 +30,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $DragonFly: src/sys/vfs/hammer/hammer_ondisk.c,v
- * 1.76 2008/08/29 20:19:08 dillon Exp $
+ * 
+ * $DragonFly: src/sys/vfs/hammer/hammer_ondisk.c,v 1.76 2008/08/29 20:19:08 dillon Exp $
  */
 /*
  * Manage HAMMER's on-disk structures.  These routines are primarily
@@ -48,9 +47,11 @@
 #include "dfly/sys/buf.h"
 #include "dfly/sys/buf2.h"
 
+#define MNT_LAZY        3       /* push data not written by filesystem syncer */
+
 static void hammer_free_volume(hammer_volume_t volume);
 static int hammer_load_volume(hammer_volume_t volume);
-static int hammer_load_buffer(hammer_buffer_t buffer, int isnew);
+int hammer_load_buffer(hammer_buffer_t buffer, int isnew);
 static int hammer_load_node(hammer_transaction_t trans,
 				hammer_node_t node, int isnew);
 static void _hammer_rel_node(hammer_node_t node, int locked);
@@ -59,10 +60,10 @@ static int
 hammer_vol_rb_compare(hammer_volume_t vol1, hammer_volume_t vol2)
 {
 	if (vol1->vol_no < vol2->vol_no)
-		return -1;
+		return(-1);
 	if (vol1->vol_no > vol2->vol_no)
-		return 1;
-	return 0;
+		return(1);
+	return(0);
 }
 
 /*
@@ -73,20 +74,20 @@ static int
 hammer_buf_rb_compare(hammer_buffer_t buf1, hammer_buffer_t buf2)
 {
 	if (buf1->zoneX_offset < buf2->zoneX_offset)
-		return -1;
+		return(-1);
 	if (buf1->zoneX_offset > buf2->zoneX_offset)
-		return 1;
-	return 0;
+		return(1);
+	return(0);
 }
 
 static int
 hammer_nod_rb_compare(hammer_node_t node1, hammer_node_t node2)
 {
 	if (node1->node_offset < node2->node_offset)
-		return -1;
+		return(-1);
 	if (node1->node_offset > node2->node_offset)
-		return 1;
-	return 0;
+		return(1);
+	return(0);
 }
 
 RB_GENERATE2(hammer_vol_rb_tree, hammer_volume, rb_node,
@@ -103,6 +104,9 @@ RB_GENERATE2(hammer_nod_rb_tree, hammer_node, rb_node,
  * Load a HAMMER volume by name.  Returns 0 on success or a positive error
  * code on failure.  Volumes must be loaded at mount time, get_volume() will
  * not load a new volume.
+ *
+ * The passed devvp is vref()'d but not locked.  This function consumes the
+ * ref (typically by associating it with the volume structure).
  *
  * Calls made to hammer_load_volume() or single-threaded
  */
@@ -138,13 +142,11 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	 * Get the device vnode
 	 */
 	if (devvp == NULL) {
-		error = nlookup_init(&nd, volume->vol_name,
-						UIO_SYSSPACE, NLC_FOLLOW);
+		error = nlookup_init(&nd, volume->vol_name, UIO_SYSSPACE, NLC_FOLLOW);
 		if (error == 0)
 			error = nlookup(&nd);
 		if (error == 0)
-			error = cache_vref(&nd.nl_nch,
-						nd.nl_cred, &volume->devvp);
+			error = cache_vref(&nd.nl_nch, nd.nl_cred, &volume->devvp);
 		nlookup_done(&nd);
 	} else {
 		error = 0;
@@ -152,22 +154,18 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	}
 
 	if (error == 0) {
-		if (vn_isdisk(volume->devvp, &error))
+		if (vn_isdisk(volume->devvp, &error)) {
 			error = vfs_mountedon(volume->devvp);
+		}
 	}
-	/*
-	if (error == 0 &&
-	    count_udev(volume->devvp->v_umajor, volume->devvp->v_uminor) > 0) {
-		error = EBUSY;
-	}*/
-	if (error == 0 && count_udev(volume->devvp->v_umajor,
-		volume->devvp->v_uminor) > 0)
+/* XXX if (error == 0 && vcount(volume->devvp) > 0) */
+	if (error == 0)
 		error = EBUSY;
 	if (error == 0) {
 		vn_lock(volume->devvp, LK_EXCLUSIVE | LK_RETRY);
 		error = vinvalbuf(volume->devvp, V_SAVE, 0, 0);
 		if (error == 0) {
-			error = VOP_OPEN(volume->devvp,
+			error = VOP_OPEN(volume->devvp, 
 					 (ronly ? FREAD : FREAD|FWRITE),
 					 FSCRED, NULL);
 		}
@@ -175,16 +173,15 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	}
 	if (error) {
 		hammer_free_volume(volume);
-		return error;
+		return(error);
 	}
 	volume->devvp->v_rdev->si_mountpoint = mp;
 	setmp = 1;
 
 	/*
-	* Extract the volume number from the volume header and do various
-	* sanity checks.
-	* error = bread(volume->devvp, 0LL, HAMMER_BUFSIZE, &bp);
-	*/
+	 * Extract the volume number from the volume header and do various
+	 * sanity checks.
+	 */
 	error = bread((struct super_block *)volume->devvp,
 					0LL, HAMMER_BUFSIZE, &bp);
 	if (error)
@@ -199,7 +196,7 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	volume->vol_no = ondisk->vol_no;
 	volume->buffer_base = ondisk->vol_buf_beg;
 	volume->vol_flags = ondisk->vol_flags;
-	volume->nblocks = ondisk->vol_nblocks;
+	volume->nblocks = ondisk->vol_nblocks; 
 	volume->maxbuf_off = HAMMER_ENCODE_RAW_BUFFER(volume->vol_no,
 				    ondisk->vol_buf_end - ondisk->vol_buf_beg);
 	volume->maxraw_off = ondisk->vol_buf_end;
@@ -249,7 +246,7 @@ late_failure:
 		VOP_CLOSE(volume->devvp, ronly ? FREAD : FREAD|FWRITE);
 		hammer_free_volume(volume);
 	}
-	return error;
+	return (error);
 }
 
 /*
@@ -272,7 +269,7 @@ hammer_adjust_volume_mode(hammer_volume_t volume, void *data __unused)
 		}
 		vn_unlock(volume->devvp);
 	}
-	return 0;
+	return(0);
 }
 
 /*
@@ -304,11 +301,6 @@ hammer_unload_volume(hammer_volume_t volume, void *data __unused)
 	/*
 	 * Clean up the persistent ref ioerror might have on the volume
 	 */
-	/*
-	if (volume->io.ioerror) {
-		volume->io.ioerror = 0;
-		hammer_(&volume->io.lock);
-	}*/
 	if (volume->io.ioerror)
 		hammer_io_clear_error_noassert(&volume->io);
 
@@ -324,12 +316,9 @@ hammer_unload_volume(hammer_volume_t volume, void *data __unused)
 	 * There should be no references on the volume, no clusters, and
 	 * no super-clusters.
 	 */
-/*	KKASSERT(volume->io.lock.refs == 0); */
 	KKASSERT(hammer_norefs(&volume->io.lock));
-
 	if (bp)
 		dfly_brelse(bp);
-	/* XX Maybe: KKASSERT(hammer_norefs(&volume->io.lock)); */
 
 	volume->ondisk = NULL;
 	if (volume->devvp) {
@@ -362,7 +351,7 @@ hammer_unload_volume(hammer_volume_t volume, void *data __unused)
 	 */
 	RB_REMOVE(hammer_vol_rb_tree, &hmp->rb_vols_root, volume);
 	hammer_free_volume(volume);
-	return 0;
+	return(0);
 }
 
 static
@@ -397,7 +386,7 @@ hammer_get_volume(struct hammer_mount *hmp, int32_t vol_no, int *errorp)
 	volume = RB_LOOKUP(hammer_vol_rb_tree, &hmp->rb_vols_root, vol_no);
 	if (volume == NULL) {
 		*errorp = ENOENT;
-		return NULL;
+		return(NULL);
 	}
 
 	/*
@@ -413,7 +402,7 @@ hammer_get_volume(struct hammer_mount *hmp, int32_t vol_no, int *errorp)
 		KKASSERT(volume->ondisk);
 		*errorp = 0;
 	}
-	return volume;
+	return(volume);
 }
 
 int
@@ -431,7 +420,7 @@ hammer_ref_volume(hammer_volume_t volume)
 		KKASSERT(volume->ondisk);
 		error = 0;
 	}
-	return error;
+	return (error);
 }
 
 hammer_volume_t
@@ -454,7 +443,7 @@ hammer_get_root_volume(struct hammer_mount *hmp, int *errorp)
 		KKASSERT(volume->ondisk);
 		*errorp = 0;
 	}
-	return volume;
+	return (volume);
 }
 
 /*
@@ -467,52 +456,38 @@ hammer_load_volume(hammer_volume_t volume)
 {
 	int error;
 
-	++volume->io.loading;
-	hammer_lock_ex(&volume->io.lock);
-
 	if (volume->ondisk == NULL) {
 		error = hammer_io_read(volume->sb, &volume->io,
 				       HAMMER_BUFSIZE);
-/*		error = hammer_io_read(volume->sb, &volume->io,
-				       volume->maxraw_off); */
-		if (error == 0)
+		if (error == 0) {
 			volume->ondisk = (void *)volume->io.bp->b_data;
+                        hammer_ref_interlock_done(&volume->io.lock);
+		} else {
+                        hammer_rel_volume(volume, 1);
+		}
 	} else {
 		error = 0;
 	}
-	--volume->io.loading;
-	hammer_unlock(&volume->io.lock);
-	return error;
+	return(error);
 }
 
 /*
- * Release a volume.  Call hammer_io_release on the last reference.  We have
- * to acquire an exclusive lock to interlock against volume->ondisk tests
- * in hammer_load_volume(), and hammer_io_release() also expects an exclusive
- * lock to be held.
+ * Release a previously acquired reference on the volume.
  *
  * Volumes are not unloaded from memory during normal operation.
  */
 void
-hammer_rel_volume(hammer_volume_t volume, int flush)
+hammer_rel_volume(hammer_volume_t volume, int locked)
 {
-	struct buf *bp = NULL;
+	struct buf *bp;
 
-	crit_enter();
-	if (volume->io.lock.refs == 1) {
-		++volume->io.loading;
-		hammer_lock_ex(&volume->io.lock);
-		if (volume->io.lock.refs == 1) {
-			volume->ondisk = NULL;
-			bp = hammer_io_release(&volume->io, flush);
-		}
-		--volume->io.loading;
-		hammer_unlock(&volume->io.lock);
+	if (hammer_rel_interlock(&volume->io.lock, locked)) {
+		volume->ondisk = NULL;
+		bp = hammer_io_release(&volume->io, locked);
+		hammer_rel_interlock_done(&volume->io.lock, locked);
+		if (bp)
+			dfly_brelse(bp);
 	}
-	hammer_rel(&volume->io.lock);
-	if (bp)
-		dfly_brelse(bp);
-	crit_exit();
 }
 
 int
@@ -524,18 +499,51 @@ hammer_mountcheck_volumes(struct hammer_mount *hmp)
 	for (i = 0; i < hmp->nvolumes; ++i) {
 		vol = RB_LOOKUP(hammer_vol_rb_tree, &hmp->rb_vols_root, i);
 		if (vol == NULL)
-			return -1; /* fix ??? EINVAL */
+			return(EINVAL);
 	}
-	return 0;
+	return(0);
 }
 
 /************************************************************************
  *				BUFFERS					*
  ************************************************************************
  *
- * Manage buffers.  Currently all blockmap-backed zones are translated
- * to zone-2 buffer offsets.
+ * Manage buffers.  Currently most blockmap-backed zones are direct-mapped
+ * to zone-2 buffer offsets, without a translation stage.  However, the
+ * hammer_buffer structure is indexed by its zoneX_offset, not its
+ * zone2_offset.
+ *
+ * The proper zone must be maintained throughout the code-base all the way
+ * through to the big-block allocator, or routines like hammer_del_buffers()
+ * will not be able to locate all potentially conflicting buffers.
  */
+
+/*
+ * Helper function returns whether a zone offset can be directly translated
+ * to a raw buffer index or not.  Really only the volume and undo zones
+ * can't be directly translated.  Volumes are special-cased and undo zones
+ * shouldn't be aliased accessed in read-only mode.
+ *
+ * This function is ONLY used to detect aliased zones during a read-only
+ * mount.
+ */
+/* static */ int
+hammer_direct_zone(hammer_off_t buf_offset)
+{
+	switch(HAMMER_ZONE_DECODE(buf_offset)) {
+	case HAMMER_ZONE_RAW_BUFFER_INDEX:
+	case HAMMER_ZONE_FREEMAP_INDEX:
+	case HAMMER_ZONE_BTREE_INDEX:
+	case HAMMER_ZONE_META_INDEX:
+	case HAMMER_ZONE_LARGE_DATA_INDEX:
+	case HAMMER_ZONE_SMALL_DATA_INDEX:
+		return(1);
+	default:
+		return(0);
+	}
+	/* NOT REACHED */
+}
+
 hammer_buffer_t
 hammer_get_buffer(hammer_mount_t hmp, hammer_off_t buf_offset,
 		  int bytes, int isnew, int *errorp)
@@ -554,17 +562,30 @@ again:
 	 */
 	buffer = RB_LOOKUP(hammer_buf_rb_tree, &hmp->rb_bufs_root, buf_offset);
 	if (buffer) {
-		if (buffer->io.lock.refs == 0)
-			++hammer_count_refedbufs;
-		hammer_ref(&buffer->io.lock);
-
 		/*
 		 * Once refed the ondisk field will not be cleared by
-		 * any other action.
+		 * any other action.  Shortcut the operation if the
+		 * ondisk structure is valid.
 		 */
-		if (buffer->ondisk && buffer->io.loading == 0) {
+found_aliased:
+		if (hammer_ref_interlock(&buffer->io.lock) == 0) {
+			hammer_io_advance(&buffer->io);
+			KKASSERT(buffer->ondisk);
 			*errorp = 0;
-			return buffer;
+			return(buffer);
+		}
+
+		/*
+		 * 0->1 transition or defered 0->1 transition (CHECK),
+		 * interlock now held.  Shortcut if ondisk is already
+		 * assigned.
+		 */
+		atomic_add_int( 1, &hammer_count_refedbufs);
+		if (buffer->ondisk) {
+			hammer_io_advance(&buffer->io);
+			hammer_ref_interlock_done(&buffer->io.lock);
+			*errorp = 0;
+			return(buffer);
 		}
 
 		/*
@@ -573,17 +594,38 @@ again:
 		 * buffers will never be in a modified state.  This should
 		 * only occur on the 0->1 transition of refs.
 		 *
-		 * lose_list can be modified via a biodone() interrupt.
+		 * lose_list can be modified via a biodone() interrupt
+		 * so the io_token must be held.
 		 */
-		if (buffer->io.mod_list == &hmp->lose_list) {
-			crit_enter();	/* biodone race against list */
-			TAILQ_REMOVE(buffer->io.mod_list, &buffer->io,
-				     mod_entry);
-			crit_exit();
-			buffer->io.mod_list = NULL;
-			KKASSERT(buffer->io.modified == 0);
+		if (buffer->io.mod_root == &hmp->lose_root) {
+			/* XXX lwkt_gettoken(&hmp->io_token); */
+			if (buffer->io.mod_root == &hmp->lose_root) {
+				RB_REMOVE(hammer_mod_rb_tree,
+					  buffer->io.mod_root, &buffer->io);
+				buffer->io.mod_root = NULL;
+				KKASSERT(buffer->io.modified == 0);
+			}
+			/* XXX lwkt_reltoken(&hmp->io_token); */
 		}
 		goto found;
+	} else if (hmp->ronly && hammer_direct_zone(buf_offset)) {
+		/*
+		 * If this is a read-only mount there could be an alias
+		 * in the raw-zone.  If there is we use that buffer instead.
+		 *
+		 * rw mounts will not have aliases.  Also note when going
+		 * from ro -> rw the recovered raw buffers are flushed and
+		 * reclaimed, so again there will not be any aliases once
+		 * the mount is rw.
+		 */
+		buffer = RB_LOOKUP(hammer_buf_rb_tree, &hmp->rb_bufs_root,
+				   (buf_offset & ~HAMMER_OFF_ZONE_MASK) |
+				   HAMMER_ZONE_RAW_BUFFER);
+		if (buffer) {
+			kprintf("HAMMER: recovered aliased %016llx\n",
+				(unsigned long long)buf_offset);
+			goto found_aliased;
+		}
 	}
 
 	/*
@@ -591,7 +633,7 @@ again:
 	 */
 	zone = HAMMER_ZONE_DECODE(buf_offset);
 
-	switch (zone) {
+	switch(zone) {
 	case HAMMER_ZONE_LARGE_DATA_INDEX:
 	case HAMMER_ZONE_SMALL_DATA_INDEX:
 		iotype = HAMMER_STRUCTURE_DATA_BUFFER;
@@ -624,7 +666,7 @@ again:
 		*errorp = 0;
 	}
 	if (*errorp)
-		return NULL;
+		return(NULL);
 
 	/*
 	 * NOTE: zone2_offset and maxbuf_off are both full zone-2 offset
@@ -635,7 +677,7 @@ again:
 	vol_no = HAMMER_VOL_DECODE(zone2_offset);
 	volume = hammer_get_volume(hmp, vol_no, errorp);
 	if (volume == NULL)
-		return NULL;
+		return(NULL);
 
 	KKASSERT(zone2_offset < volume->maxbuf_off);
 
@@ -653,33 +695,38 @@ again:
 			    (zone2_offset & HAMMER_OFF_SHORT_MASK);
 	buffer->io.bytes = bytes;
 	TAILQ_INIT(&buffer->clist);
-	hammer_ref(&buffer->io.lock);
+	hammer_ref_interlock_true(&buffer->io.lock);
 
 	/*
 	 * Insert the buffer into the RB tree and handle late collisions.
 	 */
 	if (RB_INSERT(hammer_buf_rb_tree, &hmp->rb_bufs_root, buffer)) {
-		hammer_rel(&buffer->io.lock);
+		hammer_rel_volume(volume, 0);
+		buffer->io.volume = NULL;			/* safety */
+		if (hammer_rel_interlock(&buffer->io.lock, 1))	/* safety */
+			hammer_rel_interlock_done(&buffer->io.lock, 1);
 		--hammer_count_buffers;
 		kfree(buffer, hmp->m_misc);
 		goto again;
 	}
-	++hammer_count_refedbufs;
+	atomic_add_int( 1, &hammer_count_refedbufs);
 found:
 
 	/*
-	 * Deal with on-disk info and loading races.
+	 * The buffer is referenced and interlocked.  Load the buffer
+	 * if necessary.  hammer_load_buffer() deals with the interlock
+	 * and, if an error is returned, also deals with the ref.
 	 */
-	if (buffer->ondisk == NULL || buffer->io.loading) {
+	if (buffer->ondisk == NULL) {
 		*errorp = hammer_load_buffer(buffer, isnew);
-		if (*errorp) {
-			hammer_rel_buffer(buffer, 1);
+		if (*errorp)
 			buffer = NULL;
-		}
 	} else {
+		hammer_io_advance(&buffer->io);
+		hammer_ref_interlock_done(&buffer->io.lock);
 		*errorp = 0;
 	}
-	return buffer;
+	return(buffer);
 }
 
 /*
@@ -731,6 +778,10 @@ hammer_sync_buffers(hammer_mount_t hmp, hammer_off_t base_offset, int bytes)
  *
  * The buffers may be referenced by the caller itself.  Setting reclaim
  * will cause the buffer to be destroyed when it's ref count reaches zero.
+ *
+ * Return 0 on success, EAGAIN if some buffers could not be destroyed due
+ * to additional references held by other threads, or some other (typically
+ * fatal) error.
  */
 int
 hammer_del_buffers(hammer_mount_t hmp, hammer_off_t base_offset,
@@ -741,16 +792,28 @@ hammer_del_buffers(hammer_mount_t hmp, hammer_off_t base_offset,
 	hammer_volume_t volume;
 	int vol_no;
 	int error;
+	int ret_error;
 
 	vol_no = HAMMER_VOL_DECODE(zone2_offset);
-	volume = hammer_get_volume(hmp, vol_no, &error);
-	KKASSERT(error == 0);
+	volume = hammer_get_volume(hmp, vol_no, &ret_error);
+	KKASSERT(ret_error == 0);
 
 	while (bytes > 0) {
 		buffer = RB_LOOKUP(hammer_buf_rb_tree, &hmp->rb_bufs_root,
 				   base_offset);
 		if (buffer) {
 			error = hammer_ref_buffer(buffer);
+			if (hammer_debug_general & 0x20000) {
+				kprintf("hammer: delbufr %016llx "
+					"rerr=%d 1ref=%d\n",
+					(unsigned long long)buffer->zoneX_offset,
+					error,
+					hammer_oneref(&buffer->io.lock));
+			}
+			if (error == 0 && !hammer_oneref(&buffer->io.lock)) {
+				error = EAGAIN;
+				hammer_rel_buffer(buffer, 0);
+			}
 			if (error == 0) {
 				KKASSERT(buffer->zone2_offset == zone2_offset);
 				hammer_io_clear_modify(&buffer->io, 1);
@@ -760,41 +823,76 @@ hammer_del_buffers(hammer_mount_t hmp, hammer_off_t base_offset,
 				hammer_rel_buffer(buffer, 0);
 			}
 		} else {
-			hammer_io_inval(volume, zone2_offset);
+			error = hammer_io_inval(volume, zone2_offset);
+		}
+		if (error) {
+			ret_error = error;
+			if (report_conflicts ||
+			    (hammer_debug_general & 0x8000)) {
+				kprintf("hammer_del_buffers: unable to "
+					"invalidate %016llx buffer=%p rep=%d\n",
+					(long long)base_offset,
+					buffer, report_conflicts);
+			}
 		}
 		base_offset += HAMMER_BUFSIZE;
 		zone2_offset += HAMMER_BUFSIZE;
 		bytes -= HAMMER_BUFSIZE;
 	}
 	hammer_rel_volume(volume, 0);
-	return 0;
+	return (ret_error);
 }
 
-static int
+/*
+ * Given a referenced and interlocked buffer load/validate the data.
+ *
+ * The buffer interlock will be released on return.  If an error is
+ * returned the buffer reference will also be released (and the buffer
+ * pointer will thus be stale).
+ */
+int
 hammer_load_buffer(hammer_buffer_t buffer, int isnew)
 {
 	hammer_volume_t volume;
-	int error;
+	int error=0;
 
 	/*
 	 * Load the buffer's on-disk info
 	 */
 	volume = buffer->io.volume;
-	++buffer->io.loading;
-	hammer_lock_ex(&buffer->io.lock);
 
-	if (hammer_debug_io & 0x0001) {
+	if (hammer_debug_io & 0x0004) {
 		kprintf("load_buffer %016llx %016llx isnew=%d od=%p\n",
-			buffer->zoneX_offset, buffer->zone2_offset, isnew,
-			buffer->ondisk);
+			(long long)buffer->zoneX_offset,
+			(long long)buffer->zone2_offset,
+			isnew, buffer->ondisk);
 	}
 
 	if (buffer->ondisk == NULL) {
+		/*
+		 * Issue the read or generate a new buffer.  When reading
+		 * the limit argument controls any read-ahead clustering
+		 * hammer_io_read() is allowed to do.
+		 *
+		 * We cannot read-ahead in the large-data zone and we cannot
+		 * cross a largeblock boundary as the next largeblock might
+		 * use a different buffer size.
+		 */
 		if (isnew) {
 			error = hammer_io_new(volume->sb, &buffer->io);
+		} else if ((buffer->zoneX_offset & HAMMER_OFF_ZONE_MASK) ==
+			   HAMMER_ZONE_LARGE_DATA) {
+			/* XXX error = hammer_io_read(volume->sb, &buffer->io,
+					       buffer->io.bytes); */
 		} else {
+			hammer_off_t limit;
+
+			limit = (buffer->zone2_offset +
+				 HAMMER_LARGEBLOCK_MASK64) &
+				~HAMMER_LARGEBLOCK_MASK64;
+			limit -= buffer->zone2_offset;
 			error = hammer_io_read(volume->sb, &buffer->io,
-					       volume->maxraw_off);
+					       limit);
 		}
 		if (error == 0)
 			buffer->ondisk = (void *)buffer->io.bp->b_data;
@@ -803,40 +901,59 @@ hammer_load_buffer(hammer_buffer_t buffer, int isnew)
 	} else {
 		error = 0;
 	}
-	--buffer->io.loading;
-	hammer_unlock(&buffer->io.lock);
-	return error;
+	if (error == 0) {
+		hammer_io_advance(&buffer->io);
+		hammer_ref_interlock_done(&buffer->io.lock);
+	} else {
+		hammer_rel_buffer(buffer, 1);
+	}
+	return (error);
 }
 
 /*
  * NOTE: Called from RB_SCAN, must return >= 0 for scan to continue.
- * This routine is only called during unmount.
+ * This routine is only called during unmount or when a volume is
+ * removed.
+ *
+ * If data != NULL, it specifies a volume whoose buffers should
+ * be unloaded.
  */
 int
 hammer_unload_buffer(hammer_buffer_t buffer, void *data __unused)
 {
+	struct hammer_volume *volume = (struct hammer_volume *) data;
+
+	/*
+	 * If volume != NULL we are only interested in unloading buffers
+	 * associated with a particular volume.
+	 */
+	if (volume != NULL && volume != buffer->io.volume)
+		return 0;
+
 	/*
 	 * Clean up the persistent ref ioerror might have on the buffer
-	 * and acquire a ref (steal ioerror's if we can).
+	 * and acquire a ref.  Expect a 0->1 transition.
 	 */
 	if (buffer->io.ioerror) {
-		buffer->io.ioerror = 0;
-	} else {
-		if (buffer->io.lock.refs == 0)
-			++hammer_count_refedbufs;
-		hammer_ref(&buffer->io.lock);
+		hammer_io_clear_error_noassert(&buffer->io);
+		atomic_add_int(-1, &hammer_count_refedbufs);
 	}
+	hammer_ref_interlock_true(&buffer->io.lock);
+	atomic_add_int( 1, &hammer_count_refedbufs);
 
 	/*
 	 * We must not flush a dirty buffer to disk on umount.  It should
 	 * have already been dealt with by the flusher, or we may be in
 	 * catastrophic failure.
+	 *
+	 * We must set waitdep to ensure that a running buffer is waited
+	 * on and released prior to us trying to unload the volume.
 	 */
 	hammer_io_clear_modify(&buffer->io, 1);
 	hammer_flush_buffer_nodes(buffer);
-	KKASSERT(buffer->io.lock.refs == 1);
-	hammer_rel_buffer(buffer, 2);
-	return 0;
+	buffer->io.waitdep = 1;
+	hammer_rel_buffer(buffer, 1);
+	return(0);
 }
 
 /*
@@ -846,44 +963,48 @@ hammer_unload_buffer(hammer_buffer_t buffer, void *data __unused)
 int
 hammer_ref_buffer(hammer_buffer_t buffer)
 {
+	hammer_mount_t hmp;
 	int error;
+	int locked;
 
-	if (buffer->io.lock.refs == 0)
-		++hammer_count_refedbufs;
-	hammer_ref(&buffer->io.lock);
+	/*
+	 * Acquire a ref, plus the buffer will be interlocked on the
+	 * 0->1 transition.
+	 */
+	locked = hammer_ref_interlock(&buffer->io.lock);
+	hmp = buffer->io.hmp;
 
 	/*
 	 * At this point a biodone() will not touch the buffer other then
 	 * incidental bits.  However, lose_list can be modified via
 	 * a biodone() interrupt.
 	 *
-	 * No longer loose
+	 * No longer loose.  lose_list requires the io_token.
 	 */
-	if (buffer->io.mod_list == &buffer->io.hmp->lose_list) {
-		crit_enter();
-		TAILQ_REMOVE(buffer->io.mod_list, &buffer->io, mod_entry);
-		buffer->io.mod_list = NULL;
-		crit_exit();
+	if (buffer->io.mod_root == &hmp->lose_root) {
+		/* lwkt_gettoken(&hmp->io_token); */
+		if (buffer->io.mod_root == &hmp->lose_root) {
+			RB_REMOVE(hammer_mod_rb_tree,
+				  buffer->io.mod_root, &buffer->io);
+			buffer->io.mod_root = NULL;
+		}
+		/* lwkt_reltoken(&hmp->io_token); */
 	}
 
-	if (buffer->ondisk == NULL || buffer->io.loading) {
+	if (locked) {
+		atomic_add_int( 1, &hammer_count_refedbufs);
 		error = hammer_load_buffer(buffer, 0);
-		if (error) {
-			hammer_rel_buffer(buffer, 1);
-			/*
-			 * NOTE: buffer pointer can become stale after
-			 * the above release.
-			 */
-		}
+		/* NOTE: on error the buffer pointer is stale */
 	} else {
 		error = 0;
 	}
-	return error;
+	return(error);
 }
 
 /*
- * Release a buffer.  We have to deal with several places where
- * another thread can ref the buffer.
+ * Release a reference on the buffer.  On the 1->0 transition the
+ * underlying IO will be released but the data reference is left
+ * cached.
  *
  * Only destroy the structure itself if the related buffer cache buffer
  * was disassociated from it.  This ties the management of the structure
@@ -891,7 +1012,7 @@ hammer_ref_buffer(hammer_buffer_t buffer)
  * embedded io is referenced or not.
  */
 void
-hammer_rel_buffer(hammer_buffer_t buffer, int flush)
+hammer_rel_buffer(hammer_buffer_t buffer, int locked)
 {
 	hammer_volume_t volume;
 	hammer_mount_t hmp;
@@ -900,42 +1021,52 @@ hammer_rel_buffer(hammer_buffer_t buffer, int flush)
 
 	hmp = buffer->io.hmp;
 
-	crit_enter();
-	if (buffer->io.lock.refs == 1) {
-		++buffer->io.loading;	/* force interlock check */
-		hammer_lock_ex(&buffer->io.lock);
-		if (buffer->io.lock.refs == 1) {
-			bp = hammer_io_release(&buffer->io, flush);
+	if (hammer_rel_interlock(&buffer->io.lock, locked) == 0)
+		return;
 
-			if (buffer->io.lock.refs == 1)
-				--hammer_count_refedbufs;
+	/*
+	 * hammer_count_refedbufs accounting.  Decrement if we are in
+	 * the error path or if CHECK is clear.
+	 *
+	 * If we are not in the error path and CHECK is set the caller
+	 * probably just did a hammer_ref() and didn't account for it,
+	 * so we don't account for the loss here.
+	 */
+	if (locked || (buffer->io.lock.refs & HAMMER_REFS_CHECK) == 0)
+		atomic_add_int( -1, &hammer_count_refedbufs);
 
-			if (buffer->io.bp == NULL &&
-			    buffer->io.lock.refs == 1) {
-				/*
-				 * Final cleanup
-				 *
-				 * NOTE: It is impossible for any associated
-				 * B-Tree nodes to have refs if the buffer
-				 * has no additional refs.
-				 */
-				RB_REMOVE(hammer_buf_rb_tree,
-					  &buffer->io.hmp->rb_bufs_root,
-					  buffer);
-				volume = buffer->io.volume;
-				buffer->io.volume = NULL; /* sanity */
-				hammer_rel_volume(volume, 0);
-				hammer_io_clear_modlist(&buffer->io);
-				hammer_flush_buffer_nodes(buffer);
-				KKASSERT(TAILQ_EMPTY(&buffer->clist));
-				freeme = 1;
-			}
-		}
-		--buffer->io.loading;
-		hammer_unlock(&buffer->io.lock);
+	/*
+	 * If the caller locked us or the normal released transitions
+	 * from 1->0 (and acquired the lock) attempt to release the
+	 * io.  If the called locked us we tell hammer_io_release()
+	 * to flush (which would be the unload or failure path).
+	 */
+	bp = hammer_io_release(&buffer->io, locked);
+
+	/*
+	 * If the buffer has no bp association and no refs we can destroy
+	 * it.
+	 *
+	 * NOTE: It is impossible for any associated B-Tree nodes to have
+	 * refs if the buffer has no additional refs.
+	 */
+	if (buffer->io.bp == NULL && hammer_norefs(&buffer->io.lock)) {
+		RB_REMOVE(hammer_buf_rb_tree,
+			  &buffer->io.hmp->rb_bufs_root,
+			  buffer);
+		volume = buffer->io.volume;
+		buffer->io.volume = NULL; /* sanity */
+		hammer_rel_volume(volume, 0);
+		hammer_io_clear_modlist(&buffer->io);
+		hammer_flush_buffer_nodes(buffer);
+		KKASSERT(TAILQ_EMPTY(&buffer->clist));
+		freeme = 1;
 	}
-	hammer_rel(&buffer->io.lock);
-	crit_exit();
+
+	/*
+	 * Cleanup
+	 */
+	hammer_rel_interlock_done(&buffer->io.lock, locked);
 	if (bp)
 		dfly_brelse(bp);
 	if (freeme) {
@@ -952,6 +1083,9 @@ hammer_rel_buffer(hammer_buffer_t buffer, int flush)
  *
  * Any prior buffer in *bufferp will be released and replaced by the
  * requested buffer.
+ *
+ * NOTE: The buffer is indexed via its zoneX_offset but we allow the
+ * passed cached *bufferp to match against either zoneX or zone2.
  */
 static inline
 void *
@@ -971,31 +1105,32 @@ _hammer_bread(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
 			hammer_rel_buffer(buffer, 0);
 		buffer = hammer_get_buffer(hmp, buf_offset, bytes, 0, errorp);
 		*bufferp = buffer;
-	} else
+	} else {
 		*errorp = 0;
+	}
 
 	/*
 	 * Return a pointer to the buffer data.
 	 */
 	if (buffer == NULL)
-		return NULL;
+		return(NULL);
 	else
-		return (char *)buffer->ondisk + xoff;
+		return((char *)buffer->ondisk + xoff);
 }
 
 void *
 hammer_bread(hammer_mount_t hmp, hammer_off_t buf_offset,
-				int *errorp, struct hammer_buffer **bufferp)
+	     int *errorp, struct hammer_buffer **bufferp)
 {
-	return _hammer_bread(hmp, buf_offset, HAMMER_BUFSIZE, errorp, bufferp);
+	return(_hammer_bread(hmp, buf_offset, HAMMER_BUFSIZE, errorp, bufferp));
 }
 
 void *
 hammer_bread_ext(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
-				int *errorp, struct hammer_buffer **bufferp)
+	         int *errorp, struct hammer_buffer **bufferp)
 {
 	bytes = (bytes + HAMMER_BUFMASK) & ~HAMMER_BUFMASK;
-	return _hammer_bread(hmp, buf_offset, bytes, errorp, bufferp);
+	return(_hammer_bread(hmp, buf_offset, bytes, errorp, bufferp));
 }
 
 /*
@@ -1033,16 +1168,16 @@ _hammer_bnew(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
 	 * Return a pointer to the buffer data.
 	 */
 	if (buffer == NULL)
-		return NULL;
+		return(NULL);
 	else
-		return (char *)buffer->ondisk + xoff;
+		return((char *)buffer->ondisk + xoff);
 }
 
 void *
 hammer_bnew(hammer_mount_t hmp, hammer_off_t buf_offset,
 	     int *errorp, struct hammer_buffer **bufferp)
 {
-	return _hammer_bnew(hmp, buf_offset, HAMMER_BUFSIZE, errorp, bufferp);
+	return(_hammer_bnew(hmp, buf_offset, HAMMER_BUFSIZE, errorp, bufferp));
 }
 
 void *
@@ -1050,7 +1185,7 @@ hammer_bnew_ext(hammer_mount_t hmp, hammer_off_t buf_offset, int bytes,
 		int *errorp, struct hammer_buffer **bufferp)
 {
 	bytes = (bytes + HAMMER_BUFMASK) & ~HAMMER_BUFMASK;
-	return _hammer_bnew(hmp, buf_offset, bytes, errorp, bufferp);
+	return(_hammer_bnew(hmp, buf_offset, bytes, errorp, bufferp));
 }
 
 /************************************************************************
@@ -1084,6 +1219,7 @@ hammer_get_node(hammer_transaction_t trans, hammer_off_t node_offset,
 {
 	hammer_mount_t hmp = trans->hmp;
 	hammer_node_t node;
+	int doload;
 
 	KKASSERT((node_offset & HAMMER_OFF_ZONE_MASK) == HAMMER_ZONE_BTREE);
 
@@ -1094,8 +1230,7 @@ again:
 	node = RB_LOOKUP(hammer_nod_rb_tree, &hmp->rb_nods_root, node_offset);
 	if (node == NULL) {
 		++hammer_count_nodes;
-		node = kmalloc(sizeof(*node), hmp->m_misc,
-					M_WAITOK|M_ZERO|M_USE_RESERVE);
+		node = kmalloc(sizeof(*node), hmp->m_misc, M_WAITOK|M_ZERO|M_USE_RESERVE);
 		node->node_offset = node_offset;
 		node->hmp = hmp;
 		TAILQ_INIT(&node->cursor_list);
@@ -1105,28 +1240,31 @@ again:
 			kfree(node, hmp->m_misc);
 			goto again;
 		}
-	}
-	hammer_ref(&node->lock);
-	if (node->ondisk) {
-		*errorp = 0;
+		doload = hammer_ref_interlock_true(&node->lock);
 	} else {
+		doload = hammer_ref_interlock(&node->lock);
+	}
+	if (doload) {
 		*errorp = hammer_load_node(trans, node, isnew);
 		trans->flags |= HAMMER_TRANSF_DIDIO;
+		if (*errorp)
+			node = NULL;
+	} else {
+		KKASSERT(node->ondisk);
+		*errorp = 0;
+		hammer_io_advance(&node->buffer->io);
 	}
-	if (*errorp) {
-		_hammer_rel_node(node, 1);
-		node = NULL;
-	}
-	return node;
+	return(node);
 }
 
 /*
- * Reference an already-referenced node.
+ * Reference an already-referenced node.  0->1 transitions should assert
+ * so we do not have to deal with hammer_ref() setting CHECK.
  */
 void
 hammer_ref_node(hammer_node_t node)
 {
-	KKASSERT(node->lock.refs > 0 && node->ondisk != NULL);
+	KKASSERT(hammer_isactive(&node->lock) && node->ondisk != NULL);
 	hammer_ref(&node->lock);
 }
 
@@ -1146,8 +1284,6 @@ hammer_load_node(hammer_transaction_t trans, hammer_node_t node, int isnew)
 	int error;
 
 	error = 0;
-	++node->loading;
-	hammer_lock_ex(&node->lock);
 	if (node->ondisk == NULL) {
 		/*
 		 * This is a little confusing but the jist is that
@@ -1159,8 +1295,7 @@ hammer_load_node(hammer_transaction_t trans, hammer_node_t node, int isnew)
 		 * node->buffer may become NULL while we are blocked
 		 * referencing the buffer.
 		 */
-		if (node->buffer != NULL) {
-			buffer = node->buffer;
+		if ((buffer = node->buffer) != NULL) {
 			error = hammer_ref_buffer(buffer);
 			if (error == 0 && node->buffer == NULL) {
 				TAILQ_INSERT_TAIL(&buffer->clist,
@@ -1181,18 +1316,36 @@ hammer_load_node(hammer_transaction_t trans, hammer_node_t node, int isnew)
 		if (error)
 			goto failed;
 		node->ondisk = (void *)((char *)buffer->ondisk +
-				(node->node_offset & HAMMER_BUFMASK));
-	if (isnew == 0 &&
-			(node->flags & HAMMER_NODE_CRCGOOD) == 0) {
-			if (hammer_crc_test_btree(node->ondisk) == 0)
-				Debugger("CRC FAILED: B-TREE NODE");
-			node->flags |= HAMMER_NODE_CRCGOOD;
+				        (node->node_offset & HAMMER_BUFMASK));
+
+		/*
+		 * Check CRC.  NOTE: Neither flag is set and the CRC is not
+		 * generated on new B-Tree nodes.
+		 */
+		if (isnew == 0 && 
+		    (node->flags & HAMMER_NODE_CRCANY) == 0) {
+			if (hammer_crc_test_btree(node->ondisk) == 0) {
+				if (hammer_debug_critical)
+					Debugger("CRC FAILED: B-TREE NODE");
+				node->flags |= HAMMER_NODE_CRCBAD;
+			} else {
+				node->flags |= HAMMER_NODE_CRCGOOD;
+			}
 		}
 	}
+	if (node->flags & HAMMER_NODE_CRCBAD) {
+		if (trans->flags & HAMMER_TRANSF_CRCDOM)
+			error = EDOM;
+		else
+			error = EIO;
+	}
 failed:
-	--node->loading;
-	hammer_unlock(&node->lock);
-	return error;
+	if (error) {
+		_hammer_rel_node(node, 1);
+	} else {
+		hammer_ref_interlock_done(&node->lock);
+	}
+	return (error);
 }
 
 /*
@@ -1200,25 +1353,35 @@ failed:
  */
 hammer_node_t
 hammer_ref_node_safe(hammer_transaction_t trans, hammer_node_cache_t cache,
-		int *errorp)
+		     int *errorp)
 {
 	hammer_node_t node;
+	int doload;
 
 	node = cache->node;
 	if (node != NULL) {
-		hammer_ref(&node->lock);
-		if (node->ondisk)
-			*errorp = 0;
-		else
+		doload = hammer_ref_interlock(&node->lock);
+		if (doload) {
 			*errorp = hammer_load_node(trans, node, 0);
-		if (*errorp) {
-			_hammer_rel_node(node, 0);
-			node = NULL;
+			if (*errorp)
+				node = NULL;
+		} else {
+			KKASSERT(node->ondisk);
+			if (node->flags & HAMMER_NODE_CRCBAD) {
+				if (trans->flags & HAMMER_TRANSF_CRCDOM)
+					*errorp = EDOM;
+				else
+					*errorp = EIO;
+				_hammer_rel_node(node, 0);
+				node = NULL;
+			} else {
+				*errorp = 0;
+			}
 		}
-	else
+	} else {
 		*errorp = ENOENT;
 	}
-	return node;
+	return(node);
 }
 
 /*
@@ -1238,20 +1401,27 @@ _hammer_rel_node(hammer_node_t node, int locked)
 	hammer_buffer_t buffer;
 
 	/*
-	 * If this isn't the last ref just decrement the ref count and
-	 * return.
+	 * Deref the node.  If this isn't the 1->0 transition we're basically
+	 * done.  If locked is non-zero this function will just deref the
+	 * locked node and return TRUE, otherwise it will deref the locked
+	 * node and either lock and return TRUE on the 1->0 transition or
+	 * not lock and return FALSE.
 	 */
-	if (node->lock.refs > 1) {
-		hammer_rel(&node->lock);
+	if (hammer_rel_interlock(&node->lock, locked) == 0)
 		return;
-	}
 
 	/*
-	 * If there is no ondisk info or no buffer the node failed to load,
-	 * remove the last reference and destroy the node.
+	 * Either locked was non-zero and we are interlocked, or the
+	 * hammer_rel_interlock() call returned non-zero and we are
+	 * interlocked.
+	 *
+	 * The ref-count must still be decremented if locked != 0 so
+	 * the cleanup required still varies a bit.
+	 *
+	 * hammer_flush_node() when called with 1 or 2 will dispose of
+	 * the lock and possible ref-count.
 	 */
 	if (node->ondisk == NULL) {
-		hammer_rel(&node->lock);
 		hammer_flush_node(node, locked + 1);
 		/* node is stale now */
 		return;
@@ -1261,8 +1431,10 @@ _hammer_rel_node(hammer_node_t node, int locked)
 	 * Do not disassociate the node from the buffer if it represents
 	 * a modified B-Tree node that still needs its crc to be generated.
 	 */
-	if (node->flags & HAMMER_NODE_NEEDSCRC)
+	if (node->flags & HAMMER_NODE_NEEDSCRC) {
+		hammer_rel_interlock_done(&node->lock, locked);
 		return;
+	}
 
 	/*
 	 * Do final cleanups and then either destroy the node and leave it
@@ -1272,17 +1444,18 @@ _hammer_rel_node(hammer_node_t node, int locked)
 	node->ondisk = NULL;
 
 	if ((node->flags & HAMMER_NODE_FLUSH) == 0) {
-		hammer_rel(&node->lock);
-		hammer_rel_buffer(buffer, 0);
-		return;
-	}
+		/*
+		 * Normal release.
+		 */
+		hammer_rel_interlock_done(&node->lock, locked);
+	} else {
+		/*
+		 * Destroy the node.
+		 */
+		hammer_flush_node(node, locked + 1);
+		/* node is stale */
 
-	/*
-	 * Destroy the node.
-	 */
-	hammer_rel(&node->lock);
-	hammer_flush_node(node, locked + 1);
-	/* node is stale */
+	}
 	hammer_rel_buffer(buffer, 0);
 }
 
@@ -1332,8 +1505,7 @@ hammer_uncache_node(hammer_node_cache_t cache)
 {
 	hammer_node_t node;
 
-	if (cache->node != NULL) {
-		node = cache->node;
+	if ((node = cache->node) != NULL) {
 		TAILQ_REMOVE(&node->cache_list, cache, entry);
 		cache->node = NULL;
 		if (TAILQ_EMPTY(&node->cache_list))
@@ -1358,21 +1530,41 @@ hammer_flush_node(hammer_node_t node, int locked)
 	hammer_node_cache_t cache;
 	hammer_buffer_t buffer;
 	hammer_mount_t hmp = node->hmp;
+	int dofree;
 
 	while ((cache = TAILQ_FIRST(&node->cache_list)) != NULL) {
 		TAILQ_REMOVE(&node->cache_list, cache, entry);
 		cache->node = NULL;
 	}
-	if (node->lock.refs == 0 && node->ondisk == NULL) {
+
+	/*
+	 * NOTE: refs is predisposed if another thread is blocking and
+	 *	 will be larger than 0 in that case.  We aren't MPSAFE
+	 *	 here.
+	 */
+	if (node->ondisk == NULL && hammer_norefs(&node->lock)) {
 		KKASSERT((node->flags & HAMMER_NODE_NEEDSCRC) == 0);
 		RB_REMOVE(hammer_nod_rb_tree, &node->hmp->rb_nods_root, node);
-
-		if (node->buffer != NULL) {
-			buffer = node->buffer;
+		if ((buffer = node->buffer) != NULL) {
 			node->buffer = NULL;
 			TAILQ_REMOVE(&buffer->clist, node, entry);
 			/* buffer is unreferenced because ondisk is NULL */
 		}
+		dofree = 1;
+	} else {
+		dofree = 0;
+	}
+
+	/*
+	 * Deal with the interlock if locked == 1 or locked == 2.
+	 */
+	if (locked)
+		hammer_rel_interlock_done(&node->lock, locked - 1);
+
+	/*
+	 * Destroy if requested
+	 */
+	if (dofree) {
 		--hammer_count_nodes;
 		kfree(node, hmp->m_misc);
 	}
@@ -1394,12 +1586,11 @@ hammer_flush_buffer_nodes(hammer_buffer_t buffer)
 		KKASSERT(node->ondisk == NULL);
 		KKASSERT((node->flags & HAMMER_NODE_NEEDSCRC) == 0);
 
-		if (node->lock.refs == 0) {
+		if (hammer_try_interlock_norefs(&node->lock)) {
 			hammer_ref(&node->lock);
 			node->flags |= HAMMER_NODE_FLUSH;
 			_hammer_rel_node(node, 1);
 		} else {
-			KKASSERT(node->loading != 0);
 			KKASSERT(node->buffer != NULL);
 			buffer = node->buffer;
 			node->buffer = NULL;
@@ -1425,8 +1616,8 @@ hammer_alloc_btree(hammer_transaction_t trans, hammer_off_t hint, int *errorp)
 	hammer_off_t node_offset;
 
 	node_offset = hammer_blockmap_alloc(trans, HAMMER_ZONE_BTREE_INDEX,
-					sizeof(struct hammer_node_ondisk),
-					hint, errorp);
+					    sizeof(struct hammer_node_ondisk),
+					    hint, errorp);
 	if (*errorp == 0) {
 		node = hammer_get_node(trans, node_offset, 1, errorp);
 		hammer_modify_node_noundo(trans, node);
@@ -1435,7 +1626,7 @@ hammer_alloc_btree(hammer_transaction_t trans, hammer_off_t hint, int *errorp)
 	}
 	if (buffer)
 		hammer_rel_buffer(buffer, 0);
-	return node;
+	return(node);
 }
 
 /*
@@ -1449,19 +1640,19 @@ hammer_alloc_btree(hammer_transaction_t trans, hammer_off_t hint, int *errorp)
  * *data_bufferp.
  */
 void *
-hammer_alloc_data(hammer_transaction_t trans, int32_t data_len,
-	u_int16_t rec_type, hammer_off_t *data_offsetp,
-	struct hammer_buffer **data_bufferp,
-	hammer_off_t hint, int *errorp)
+hammer_alloc_data(hammer_transaction_t trans, int32_t data_len, 
+		  u_int16_t rec_type, hammer_off_t *data_offsetp,
+		  struct hammer_buffer **data_bufferp,
+		  hammer_off_t hint, int *errorp)
 {
 	void *data;
 	int zone;
 
 	/*
-	* Allocate data
-	*/
+	 * Allocate data
+	 */
 	if (data_len) {
-		switch (rec_type) {
+		switch(rec_type) {
 		case HAMMER_RECTYPE_INODE:
 		case HAMMER_RECTYPE_DIRENTRY:
 		case HAMMER_RECTYPE_EXT:
@@ -1477,35 +1668,32 @@ hammer_alloc_data(hammer_transaction_t trans, int32_t data_len,
 				zone = HAMMER_ZONE_SMALL_DATA_INDEX;
 			} else {
 				data_len = (data_len + HAMMER_BUFMASK) &
-						~HAMMER_BUFMASK;
+					   ~HAMMER_BUFMASK;
 				zone = HAMMER_ZONE_LARGE_DATA_INDEX;
 			}
 			break;
 		default:
 			panic("hammer_alloc_data: rec_type %04x unknown",
-						rec_type);
+			      rec_type);
 			zone = 0;	/* NOT REACHED */
 			break;
 		}
-		*data_offsetp = hammer_blockmap_alloc(trans,
-						zone,
-						data_len,
-						hint,
-						errorp);
-	} else
+		*data_offsetp = hammer_blockmap_alloc(trans, zone, data_len,
+						      hint, errorp);
+	} else {
 		*data_offsetp = 0;
-
+	}
 	if (*errorp == 0 && data_bufferp) {
 		if (data_len) {
 			data = hammer_bread_ext(trans->hmp, *data_offsetp,
-					data_len, errorp, data_bufferp);
+						data_len, errorp, data_bufferp);
 		} else {
 			data = NULL;
 		}
 	} else {
 		data = NULL;
 	}
-	return data;
+	return(data);
 }
 
 /*
@@ -1526,12 +1714,12 @@ hammer_queue_inodes_flusher(hammer_mount_t hmp, int waitfor)
 	info.waitfor = waitfor;
 	if (waitfor == MNT_WAIT) {
 		vmntvnodescan(hmp->mp, VMSC_GETVP|VMSC_ONEPASS,
-			hammer_sync_scan1, hammer_sync_scan2, &info);
+			      hammer_sync_scan1, hammer_sync_scan2, &info);
 	} else {
 		vmntvnodescan(hmp->mp, VMSC_GETVP|VMSC_ONEPASS|VMSC_NOWAIT,
-			hammer_sync_scan1, hammer_sync_scan2, &info);
+			      hammer_sync_scan1, hammer_sync_scan2, &info);
 	}
-	return info.error;
+	return(info.error);
 }
 
 /*
@@ -1539,29 +1727,38 @@ hammer_queue_inodes_flusher(hammer_mount_t hmp, int waitfor)
  * the vnodes in case any were already flushing during the first pass,
  * and activate the flusher twice (the second time brings the UNDO FIFO's
  * start position up to the end position after the first call).
+ *
+ * If doing a lazy sync make just one pass on the vnode list, ignoring
+ * any new vnodes added to the list while the sync is in progress.
  */
 int
 hammer_sync_hmp(hammer_mount_t hmp, int waitfor)
 {
 	struct hammer_sync_info info;
+	int flags;
+
+	flags = VMSC_GETVP;
+	if (waitfor & MNT_LAZY)
+		flags |= VMSC_ONEPASS;
 
 	info.error = 0;
 	info.waitfor = MNT_NOWAIT;
-	vmntvnodescan(hmp->mp, VMSC_GETVP|VMSC_NOWAIT,
-			hammer_sync_scan1, hammer_sync_scan2, &info);
-	if (info.error == 0 && waitfor == MNT_WAIT) {
+	vmntvnodescan(hmp->mp, flags | VMSC_NOWAIT,
+		      hammer_sync_scan1, hammer_sync_scan2, &info);
+
+	if (info.error == 0 && (waitfor & MNT_WAIT)) {
 		info.waitfor = waitfor;
-		vmntvnodescan(hmp->mp, VMSC_GETVP,
-				hammer_sync_scan1, hammer_sync_scan2, &info);
+		vmntvnodescan(hmp->mp, flags,
+			      hammer_sync_scan1, hammer_sync_scan2, &info);
 	}
-	if (waitfor == MNT_WAIT) {
-		hammer_flusher_sync(hmp);
-		hammer_flusher_sync(hmp);
+        if (waitfor == MNT_WAIT) {
+                hammer_flusher_sync(hmp);
+                hammer_flusher_sync(hmp);
 	} else {
-		hammer_flusher_async(hmp, NULL);
-		hammer_flusher_async(hmp, NULL);
+                hammer_flusher_async(hmp, NULL);
+                hammer_flusher_async(hmp, NULL);
 	}
-	return info.error;
+	return(info.error);
 }
 
 static int
@@ -1571,11 +1768,11 @@ hammer_sync_scan1(struct mount *mp, struct vnode *vp, void *data)
 
 	ip = VTOI(vp);
 	if (vp->v_type == VNON || ip == NULL ||
-		((ip->flags & HAMMER_INODE_MODMASK) == 0 &&
-		RB_EMPTY(&vp->v_rbdirty_tree))) {
-		return -1;
+	    ((ip->flags & HAMMER_INODE_MODMASK) == 0 &&
+	     RB_EMPTY(&vp->v_rbdirty_tree))) {
+		return(-1);
 	}
-	return 0;
+	return(0);
 }
 
 static int
@@ -1587,13 +1784,13 @@ hammer_sync_scan2(struct mount *mp, struct vnode *vp, void *data)
 
 	ip = VTOI(vp);
 	if (vp->v_type == VNON || vp->v_type == VBAD ||
-		((ip->flags & HAMMER_INODE_MODMASK) == 0 &&
-		RB_EMPTY(&vp->v_rbdirty_tree))) {
-		return 0;
+	    ((ip->flags & HAMMER_INODE_MODMASK) == 0 &&
+	     RB_EMPTY(&vp->v_rbdirty_tree))) {
+		return(0);
 	}
-	error = VOP_FSYNC(vp, MNT_NOWAIT);
+	error = VOP_FSYNC(vp, MNT_NOWAIT, 0);
 	if (error)
 		info->error = error;
-	return 0;
+	return(0);
 }
 

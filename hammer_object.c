@@ -37,6 +37,9 @@
 
 #include "hammer.h"
 
+#define HAMMER_RECF_DIRECT_IO      0x0200  /* related direct I/O running*/
+#define HAMMER_RECF_DIRECT_INVAL   0x0800  /* buffer alias invalidation */
+
 int hammer_limit_inode_recs;
 
 static int hammer_mem_lookup(hammer_cursor_t cursor);

@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2007-2008 The DragonFly Project.  All rights reserved.
- *
+ * 
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- *
+ * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- *
+ * 
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,9 +30,6 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $DragonFly: src/sys/vfs/hammer/hammer_inode.c,
- * v 1.114 2008/09/24 00:53:51 dillon Exp $
  */
 
 #include "dfly_wrap.h"
@@ -56,14 +53,14 @@ static int	hammer_setup_parent_inodes(hammer_inode_t ip, int depth,
 static int	hammer_setup_parent_inodes_helper(hammer_record_t record,
 					int depth, hammer_flush_group_t flg);
 static void	hammer_inode_wakereclaims(hammer_inode_t ip);
-#if 0
 static struct hammer_inostats *hammer_inode_inostats(hammer_mount_t hmp,
 					pid_t pid);
-#endif
 
 #ifdef DEBUG_TRUNCATE
-struct hammer_inode *HammerTruncIp;
+extern struct hammer_inode *HammerTruncIp;
 #endif
+
+struct krate hammer_gen_krate = { 1 };
 
 /*
  * RB-Tree support for inode structures
@@ -72,29 +69,28 @@ int
 hammer_ino_rb_compare(hammer_inode_t ip1, hammer_inode_t ip2)
 {
 	if (ip1->obj_localization < ip2->obj_localization)
-		return -1;
+		return(-1);
 	if (ip1->obj_localization > ip2->obj_localization)
-		return 1;
+		return(1);
 	if (ip1->obj_id < ip2->obj_id)
-		return -1;
+		return(-1);
 	if (ip1->obj_id > ip2->obj_id)
-		return 1;
+		return(1);
 	if (ip1->obj_asof < ip2->obj_asof)
-		return -1;
+		return(-1);
 	if (ip1->obj_asof > ip2->obj_asof)
-		return 1;
-	return 0;
+		return(1);
+	return(0);
 }
-
 
 int
 hammer_redo_rb_compare(hammer_inode_t ip1, hammer_inode_t ip2)
 {
 	if (ip1->redo_fifo_start < ip2->redo_fifo_start)
-		return -1;
+		return(-1);
 	if (ip1->redo_fifo_start > ip2->redo_fifo_start)
-		return 1;
-	return 0;
+		return(1);
+	return(0);
 }
 
 /*
@@ -104,18 +100,18 @@ static int
 hammer_inode_info_cmp(hammer_inode_info_t info, hammer_inode_t ip)
 {
 	if (info->obj_localization < ip->obj_localization)
-		return -1;
+		return(-1);
 	if (info->obj_localization > ip->obj_localization)
-		return 1;
+		return(1);
 	if (info->obj_id < ip->obj_id)
-		return -1;
+		return(-1);
 	if (info->obj_id > ip->obj_id)
-		return 1;
+		return(1);
 	if (info->obj_asof < ip->obj_asof)
-		return -1;
+		return(-1);
 	if (info->obj_asof > ip->obj_asof)
-		return 1;
-	return 0;
+		return(1);
+	return(0);
 }
 
 /*
@@ -129,14 +125,14 @@ hammer_inode_info_cmp_all_history(hammer_inode_t ip, void *data)
 	hammer_inode_info_t info = data;
 
 	if (ip->obj_localization > info->obj_localization)
-		return 1;
+		return(1);
 	if (ip->obj_localization < info->obj_localization)
-		return -1;
+		return(-1);
 	if (ip->obj_id > info->obj_id)
-		return 1;
+		return(1);
 	if (ip->obj_id < info->obj_id)
-		return -1;
-	return 0;
+		return(-1);
+	return(0);
 }
 
 /*
@@ -148,10 +144,10 @@ hammer_inode_pfs_cmp(hammer_inode_t ip, void *data)
 {
 	u_int32_t localization = *(u_int32_t *)data;
 	if (ip->obj_localization > localization)
-		return 1;
+		return(1);
 	if (ip->obj_localization < localization)
-		return -1;
-	return 0;
+		return(-1);
+	return(0);
 }
 
 /*
@@ -161,18 +157,18 @@ static int
 hammer_pfs_rb_compare(hammer_pseudofs_inmem_t p1, hammer_pseudofs_inmem_t p2)
 {
 	if (p1->localization < p2->localization)
-		return -1;
+		return(-1);
 	if (p1->localization > p2->localization)
-		return 1;
-	return 0;
+		return(1);
+	return(0);
 }
 
 
 RB_GENERATE(hammer_ino_rb_tree, hammer_inode, rb_node, hammer_ino_rb_compare);
 RB_GENERATE_XLOOKUP(hammer_ino_rb_tree, INFO, hammer_inode, rb_node,
-	hammer_inode_info_cmp, hammer_inode_info_t);
+		hammer_inode_info_cmp, hammer_inode_info_t);
 RB_GENERATE2(hammer_pfs_rb_tree, hammer_pseudofs_inmem, rb_node,
-	hammer_pfs_rb_compare, u_int32_t, localization);
+             hammer_pfs_rb_compare, u_int32_t, localization);
 
 /*
  * The kernel is not actively referencing this vnode but is still holding
@@ -194,7 +190,7 @@ hammer_vop_inactive(struct vop_inactive_args *ap)
 	 */
 	if (ip == NULL) {
 		/* XXX fix vrecycle(ap->a_vp); */
-		return 0;
+		return(0);
 	}
 
 	/*
@@ -204,23 +200,23 @@ hammer_vop_inactive(struct vop_inactive_args *ap)
 	 * resources which can matter a lot in a heavily loaded system.
 	 *
 	 * This can deadlock in vfsync() if we aren't careful.
-	 *
+	 * 
 	 * Do not queue the inode to the flusher if we still have visibility,
 	 * otherwise namespace calls such as chmod will unnecessarily generate
 	 * multiple inode updates.
 	 */
 	if (ip->ino_data.nlinks == 0) {
 		hmp = ip->hmp;
-		crit_enter();
+		lwkt_gettoken(&hmp->fs_token);
 		hammer_inode_unloadable_check(ip, 0);
 		if (ip->flags & HAMMER_INODE_MODMASK)
 			hammer_flush_inode(ip, 0);
-		crit_exit();
-		/* XXX fix vrecycle(ap->a_vp); */
+		lwkt_reltoken(&hmp->fs_token);
+		/* XXX vrecycle(ap->a_vp); */
 	}
 #endif
 	printk(KERN_INFO "hammer_vop_inactive\n");
-	return 0;
+	return(0);
 }
 
 /*
@@ -242,26 +238,25 @@ hammer_vop_reclaim(struct vop_reclaim_args *ap)
 
 	/* vp = ap->a_vp; */
 
-	if (vp->v_data != NULL) {
-		ip = vp->v_data;
+	if ((ip = vp->v_data) != NULL) {
 		hmp = ip->hmp;
-		crit_enter();
+		lwkt_gettoken(&hmp->fs_token);
 		hammer_lock_ex(&ip->lock);
 		vp->v_data = NULL;
 		ip->vp = NULL;
 
 		if ((ip->flags & HAMMER_INODE_RECLAIM) == 0) {
-			++hammer_count_reclaiming;
-			++hmp->inode_reclaims;
+			++hammer_count_reclaims;
+			++hmp->count_reclaims;
 			ip->flags |= HAMMER_INODE_RECLAIM;
 		}
 		hammer_unlock(&ip->lock);
 		hammer_rel_inode(ip, 1);
-		crit_exit();
+		lwkt_reltoken(&hmp->fs_token);
 	}
 #endif
 	printk(KERN_INFO "vop_reclaim\n");
-	return 0;
+	return(0);
 }
 
 /*
@@ -282,10 +277,8 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 	hmp = ip->hmp;
 
 	for (;;) {
-		if (ip->vp == NULL) {
-			vp = ip->vp;
-			/* XXX fix it error = getnewvnode(VT_HAMMER,
-						hmp->mp, vpp, 0, 0); */
+		if ((vp = ip->vp) == NULL) {
+			/* XXX error = getnewvnode(VT_HAMMER, hmp->mp, vpp, 0, 0); */
 			if (error)
 				break;
 			hammer_lock_ex(&ip->lock);
@@ -305,7 +298,7 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 
 			hammer_inode_wakereclaims(ip);
 
-			switch (ip->ino_data.obj_type) {
+			switch(ip->ino_data.obj_type) {
 			case HAMMER_OBJTYPE_CDEV:
 			case HAMMER_OBJTYPE_BDEV:
 				/* vp->v_ops = &hmp->mp->mnt_vn_spec_ops;
@@ -358,8 +351,7 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 		 * will properly fail.
 		 */
 		hammer_lock_ex(&ip->lock);
-		if (ip->vp == NULL) {
-			vp = ip->vp;
+		if ((vp = ip->vp) == NULL) {
 			hammer_unlock(&ip->lock);
 			continue;
 		}
@@ -380,7 +372,7 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 		vdrop(vp); */
 	}
 	*vpp = vp;
-	return error;
+	return(error);
 }
 
 /*
@@ -390,8 +382,8 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
  */
 void
 hammer_scan_inode_snapshots(hammer_mount_t hmp, hammer_inode_info_t iinfo,
-			int (*callback)(hammer_inode_t ip, void *data),
-			void *data)
+		            int (*callback)(hammer_inode_t ip, void *data),
+			    void *data)
 {
 	hammer_ino_rb_tree_RB_SCAN(&hmp->rb_inos_root,
 				   hammer_inode_info_cmp_all_history,
@@ -444,22 +436,17 @@ loop:
 	if (ip) {
 		if (ip->flags & HAMMER_INODE_DUMMY) {
 			*errorp = ENOENT;
-			return NULL;
+			return(NULL);
 		}
-
-#if 0
-		if (ip->vp == NULL)
-			trans->flags |= HAMMER_TRANSF_NEWINODE;
-#endif
 		hammer_ref(&ip->lock);
 		*errorp = 0;
-		return ip;
+		return(ip);
 	}
 
 	/*
 	 * Allocate a new inode structure and deal with races later.
-	 */
-	ip = kzalloc(sizeof(struct hammer_inode), GFP_KERNEL);
+	 */ /* struct hammer_inode */
+	ip = kzalloc(sizeof(*ip), hmp->m_inodes, GFP_KERNEL);
 	++hammer_count_inodes;
 	++hmp->count_inodes;
 	ip->obj_id = obj_id;
@@ -471,7 +458,6 @@ loop:
 	ip->cache[1].ip = ip;
 	ip->cache[2].ip = ip;
 	ip->cache[3].ip = ip;
-
 	if (hmp->ronly)
 		ip->flags |= HAMMER_INODE_RO;
 	ip->sync_trunc_off = ip->trunc_off = ip->save_trunc_off =
@@ -481,15 +467,15 @@ loop:
 	hammer_ref(&ip->lock);
 
 	/*
-	* Locate the on-disk inode.  If this is a PFS root we always
-	* access the current version of the root inode and (if it is not
-	* a master) always access information under it with a snapshot
-	* TID.
-	*
-	* We cache recent inode lookups in this directory in dip->cache[2].
-	* If we can't find it we assume the inode we are looking for is
-	* close to the directory inode.
-	*/
+	 * Locate the on-disk inode.  If this is a PFS root we always
+	 * access the current version of the root inode and (if it is not
+	 * a master) always access information under it with a snapshot
+	 * TID.
+	 *
+	 * We cache recent inode lookups in this directory in dip->cache[2].
+	 * If we can't find it we assume the inode we are looking for is
+	 * close to the directory inode.
+	 */
 retry:
 	cachep = NULL;
 	if (dip) {
@@ -499,9 +485,6 @@ retry:
 			cachep = &dip->cache[0];
 	}
 	hammer_init_cursor(trans, &cursor, cachep, NULL);
-
-	/* hammer_init_cursor(trans, &cursor,
-		(dip ? &dip->cache[0] : NULL), NULL); */
 	cursor.key_beg.localization = localization + HAMMER_LOCALIZE_INODE;
 	cursor.key_beg.obj_id = ip->obj_id;
 	cursor.key_beg.key = 0;
@@ -551,9 +534,6 @@ retry:
 			hammer_cache_node(&dip->cache[2], cursor.node);
 		}
 
-		/* if (dip && dip->cache[1].node)
-			hammer_cache_node(&ip->cache[1], dip->cache[1].node); */
-
 		/*
 		 * The file should not contain any data past the file size
 		 * stored in the inode.  Setting save_trunc_off to the
@@ -600,7 +580,6 @@ retry:
 		ip = NULL;
 	}
 	hammer_done_cursor(&cursor);
-	/* trans->flags |= HAMMER_TRANSF_NEWINODE; */
 
 	/*
 	 * NEWINODE is only set if the inode becomes dirty later,
@@ -608,7 +587,7 @@ retry:
 	 *
 	 * trans->flags |= HAMMER_TRANSF_NEWINODE;
 	 */
-	return ip;
+	return (ip);
 }
 
 /*
@@ -646,10 +625,10 @@ loop:
 	if (ip) {
 		if ((ip->flags & HAMMER_INODE_DUMMY) == 0) {
 			*errorp = ENOENT;
-			return NULL;
+			return(NULL);
 		}
 		hammer_ref(&ip->lock);
-		return ip;
+		return(ip);
 	}
 
 	/*
@@ -718,7 +697,7 @@ loop:
 		ip = NULL;
 	}
 	trans->flags |= HAMMER_TRANSF_NEWINODE;
-	return ip;
+	return (ip);
 }
 
 /*
@@ -745,7 +724,7 @@ hammer_find_inode(hammer_transaction_t trans, int64_t obj_id,
 		else
 			hammer_ref(&ip->lock);
 	}
-	return ip;
+	return(ip);
 }
 
 /*
@@ -757,14 +736,13 @@ hammer_find_inode(hammer_transaction_t trans, int64_t obj_id,
  */
 int
 hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
-				struct ucred *cred,
-				hammer_inode_t dip,
-				const char *name, int namelen,
-				hammer_pseudofs_inmem_t pfsm,
-				struct hammer_inode **ipp)
+		    struct ucred *cred,
+		    hammer_inode_t dip, const char *name, int namelen,
+		    hammer_pseudofs_inmem_t pfsm, struct hammer_inode **ipp)
 {
 	hammer_mount_t hmp;
 	hammer_inode_t ip;
+	uid_t xuid;
 	int error;
 	int64_t namekey;
 	u_int32_t dummy;
@@ -811,11 +789,11 @@ hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
 	/*
 	 * A nohistory designator on the parent directory is inherited by
 	 * the child.  We will do this even for pseudo-fs creation... the
-	 * sysad can turn it off.	(SF_NOHISTORY|UF_NOHISTORY|UF_NODUMP);
+	 * sysad can turn it off.
 	 */
 	if (dip) {
 		ip->ino_data.uflags = dip->ino_data.uflags &
-				      (SF_NOHISTORY|UF_NOHISTORY);
+				      (SF_NOHISTORY|UF_NOHISTORY|UF_NODUMP);
 	}
 
 	ip->ino_leaf.base.btype = HAMMER_BTREE_TYPE_RECORD;
@@ -826,11 +804,11 @@ hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
 	ip->ino_leaf.base.create_tid = 0;
 	ip->ino_leaf.base.delete_tid = 0;
 	ip->ino_leaf.base.rec_type = HAMMER_RECTYPE_INODE;
-/*	ip->ino_leaf.base.obj_type = hammer_get_obj_type(vap->va_type); */
+	ip->ino_leaf.base.obj_type = hammer_get_obj_type(vap->va_type);
 
 	ip->ino_data.obj_type = ip->ino_leaf.base.obj_type;
 	ip->ino_data.version = HAMMER_INODE_DATA_VERSION;
-/*	ip->ino_data.mode = vap->va_mode; */
+	ip->ino_data.mode = vap->va_mode;
 	ip->ino_data.ctime = trans->time;
 
 	/*
@@ -841,6 +819,12 @@ hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
 		if (ip->ino_leaf.base.obj_type == HAMMER_OBJTYPE_DIRECTORY) {
 			ip->ino_data.cap_flags |=
 				HAMMER_INODE_CAP_DIR_LOCAL_INO;
+		}
+	}
+	if (trans->hmp->version >= HAMMER_VOL_VERSION_SIX) {
+		if (ip->ino_leaf.base.obj_type == HAMMER_OBJTYPE_DIRECTORY) {
+			ip->ino_data.cap_flags |=
+				HAMMER_INODE_CAP_DIRHASH_ALG1;
 		}
 	}
 
@@ -858,16 +842,16 @@ hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
 	 */
 	if (ip->ino_data.obj_type == HAMMER_OBJTYPE_DIRECTORY &&
 	    ip->obj_id == HAMMER_OBJID_ROOT) {
-		ip->ino_data.ext.obj.parent_obj_localization =
+		ip->ino_data.ext.obj.parent_obj_localization = 
 						dip->obj_localization;
 	}
 #endif
 
-	switch (ip->ino_leaf.base.obj_type) {
+	switch(ip->ino_leaf.base.obj_type) {
 	case HAMMER_OBJTYPE_CDEV:
 	case HAMMER_OBJTYPE_BDEV:
-		/* XXX ip->ino_data.rmajor = vap->va_rmajor;
-		ip->ino_data.rminor = vap->va_rminor; */
+		ip->ino_data.rmajor = vap->va_rmajor;
+		ip->ino_data.rminor = vap->va_rminor;
 		break;
 	default:
 		break;
@@ -878,13 +862,12 @@ hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
 	 * the vap.
 	 */
 	if (dip) {
-		/* xuid = hammer_to_unix_xid(&dip->ino_data.uid);
-		 xuid = vop_helper_create_uid(hmp->mp, dip->ino_data.mode,
-					     xuid, cred, &vap->va_mode); XXX */
+		xuid = hammer_to_unix_xid(&dip->ino_data.uid);
+		xuid = vop_helper_create_uid(hmp->mp, dip->ino_data.mode,
+					     xuid, cred, &vap->va_mode);
 	} else {
-		/* xuid = 0; */
+		xuid = 0;
 	}
-	/*
 	ip->ino_data.mode = vap->va_mode;
 
 	if (vap->va_vaflags & VA_UID_UUID_VALID)
@@ -900,7 +883,6 @@ hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
 		hammer_guid_to_uuid(&ip->ino_data.gid, vap->va_gid);
 	else if (dip)
 		ip->ino_data.gid = dip->ino_data.gid;
-	*/
 
 	hammer_ref(&ip->lock);
 
@@ -929,7 +911,7 @@ hammer_create_inode(hammer_transaction_t trans, struct vattr *vap,
 		hammer_free_inode(ip);
 	}
 	*ipp = ip;
-	return error;
+	return(error);
 }
 
 /*
@@ -981,7 +963,7 @@ retry:
 	if (pfsm) {
 		hammer_ref(&pfsm->lock);
 		*errorp = 0;
-		return pfsm;
+		return(pfsm);
 	}
 
 	/*
@@ -997,7 +979,7 @@ retry:
 		ip = NULL;
 	}
 
-	pfsm = kzalloc(sizeof(*pfsm), GFP_KERNEL);
+	pfsm = kzalloc(sizeof(*pfsm), hmp->m_misc, GFP_KERNEL);
 	pfsm->localization = localization;
 	pfsm->pfsd.unique_uuid = trans->rootvol->ondisk->vol_fsid;
 	pfsm->pfsd.shared_uuid = pfsm->pfsd.unique_uuid;
@@ -1042,7 +1024,7 @@ retry:
 		kfree(pfsm, hmp->m_misc);
 		goto retry;
 	}
-	return pfsm;
+	return(pfsm);
 }
 
 /*
@@ -1110,7 +1092,7 @@ retry:
 	if (error == EDEADLK)
 		goto retry;
 	hammer_rel_inode(ip, 0);
-	return error;
+	return(error);
 }
 
 /*
@@ -1145,7 +1127,7 @@ hammer_mkroot_pseudofs(hammer_transaction_t trans, struct ucred *cred,
 	}
 	if (ip)
 		hammer_rel_inode(ip, 0);
-	return error;
+	return(error);
 }
 
 /*
@@ -1159,14 +1141,14 @@ hammer_unload_pseudofs_callback(hammer_inode_t ip, void *data)
 	int res;
 
 	hammer_ref(&ip->lock);
-/*	if (hammer_isactive(&ip->lock) == 2 && ip->vp)
-		vclean_unlocked(ip->vp); */
+	if (hammer_isactive(&ip->lock) == 2 && ip->vp)
+		vclean_unlocked(ip->vp);
 	if (hammer_isactive(&ip->lock) == 1 && ip->vp == NULL)
 		res = 0;
 	else
 		res = -1;	/* stop, someone is using the inode */
 	hammer_rel_inode(ip, 0);
-	return res;
+	return(res);
 }
 
 int
@@ -1186,7 +1168,7 @@ hammer_unload_pseudofs(hammer_transaction_t trans, u_int32_t localization)
 	}
 	if (res != 0)
 		res = ENOTEMPTY;
-	return res;
+	return(res);
 }
 
 
@@ -1197,8 +1179,7 @@ void
 hammer_rel_pseudofs(hammer_mount_t hmp, hammer_pseudofs_inmem_t pfsm)
 {
 	hammer_rel(&pfsm->lock);
-	/* if (hammer_norefs(&pfsm->lock)) { */
-	if (pfsm->lock.refs == 0) {
+	if (hammer_norefs(&pfsm->lock)) {
 		RB_REMOVE(hammer_pfs_rb_tree, &hmp->rb_pfsm_root, pfsm);
 		kfree(pfsm, hmp->m_misc);
 	}
@@ -1228,7 +1209,7 @@ retry:
 	if ((ip->flags & (HAMMER_INODE_ONDISK|HAMMER_INODE_DELONDISK)) ==
 	    HAMMER_INODE_ONDISK) {
 		hammer_normalize_cursor(cursor);
-		cursor->key_beg.localization = ip->obj_localization +
+		cursor->key_beg.localization = ip->obj_localization + 
 					       HAMMER_LOCALIZE_INODE;
 		cursor->key_beg.obj_id = ip->obj_id;
 		cursor->key_beg.key = 0;
@@ -1249,9 +1230,9 @@ retry:
 			error = hammer_ip_delete_record(cursor, ip, trans->tid);
 			if (hammer_debug_inode)
 				kprintf(" error %d\n", error);
-			if (error == 0)
+			if (error == 0) {
 				ip->flags |= HAMMER_INODE_DELONDISK;
-
+			}
 			if (cursor->node)
 				hammer_cache_node(&ip->cache[0], cursor->node);
 		}
@@ -1307,7 +1288,7 @@ retry:
 		for (;;) {
 			error = hammer_ip_sync_record_cursor(cursor, record);
 			if (hammer_debug_inode)
-				kprintf("GENREC %p rec %08x %d\n",
+				kprintf("GENREC %p rec %08x %d\n",	
 					ip, record->flags, error);
 			if (error != EDEADLK)
 				break;
@@ -1366,13 +1347,13 @@ retry:
 	 * If the inode has been destroyed, clean out any left-over flags
 	 * that may have been set by the frontend.
 	 */
-	if (error == 0 && (ip->flags & HAMMER_INODE_DELETED)) {
+	if (error == 0 && (ip->flags & HAMMER_INODE_DELETED)) { 
 		ip->sync_flags &= ~(HAMMER_INODE_DDIRTY |
 				    HAMMER_INODE_SDIRTY |
 				    HAMMER_INODE_ATIME |
 				    HAMMER_INODE_MTIME);
 	}
-	return error;
+	return(error);
 }
 
 /*
@@ -1394,11 +1375,11 @@ hammer_update_itimes(hammer_cursor_t cursor, hammer_inode_t ip)
 retry:
 	if ((ip->flags & (HAMMER_INODE_ONDISK|HAMMER_INODE_DELONDISK)) !=
 	    HAMMER_INODE_ONDISK) {
-		return 0;
+		return(0);
 	}
 
 	hammer_normalize_cursor(cursor);
-	cursor->key_beg.localization = ip->obj_localization +
+	cursor->key_beg.localization = ip->obj_localization + 
 				       HAMMER_LOCALIZE_INODE;
 	cursor->key_beg.obj_id = ip->obj_id;
 	cursor->key_beg.key = 0;
@@ -1450,7 +1431,7 @@ retry:
 		if (error == 0)
 			goto retry;
 	}
-	return error;
+	return(error);
 }
 
 /*
@@ -1462,9 +1443,6 @@ retry:
 void
 hammer_rel_inode(struct hammer_inode *ip, int flush)
 {
-/* since all the lock handling and reference counting has been
- * replaced by no-ops, better make this a no-op, too (at least for
- * the time being) */
 	/*hammer_mount_t hmp = ip->hmp;*/
 
 	/*
@@ -1513,7 +1491,7 @@ hammer_unload_inode(struct hammer_inode *ip)
 	hammer_mount_t hmp = ip->hmp;
 
 	KASSERT(hammer_oneref(&ip->lock),
-		("hammer_unload_inode: %d refs\n", hammer_isactive(&ip->lock)));
+		("hammer_unload_inode: %d refs", hammer_isactive(&ip->lock)));
 	KKASSERT(ip->vp == NULL);
 	KKASSERT(ip->flush_state == HAMMER_FST_IDLE);
 	KKASSERT(ip->cursor_ip_refs == 0);
@@ -1530,7 +1508,7 @@ hammer_unload_inode(struct hammer_inode *ip)
 	RB_REMOVE(hammer_ino_rb_tree, &hmp->rb_inos_root, ip);
 
 	hammer_free_inode(ip);
-	return 0;
+	return(0);
 }
 
 /*
@@ -1576,7 +1554,7 @@ hammer_destroy_inode_callback(struct hammer_inode *ip, void *data __unused)
 	 * Remove the inode from any flush group, force it idle.  FLUSH
 	 * and SETUP states have an inode ref.
 	 */
-	switch (ip->flush_state) {
+	switch(ip->flush_state) {
 	case HAMMER_FST_FLUSH:
 		RB_REMOVE(hammer_fls_rb_tree, &ip->flush_group->flush_tree, ip);
 		--ip->flush_group->refs;
@@ -1603,7 +1581,7 @@ hammer_destroy_inode_callback(struct hammer_inode *ip, void *data __unused)
 		hammer_ref(&ip->lock);
 	}
 	hammer_unload_inode(ip);
-	return 0;
+	return(0);
 }
 
 /*
@@ -1621,7 +1599,7 @@ hammer_reload_inode(hammer_inode_t ip, void *arg __unused)
 		ip->flags |= HAMMER_INODE_RO;
 	else
 		ip->flags &= ~HAMMER_INODE_RO;
-	return 0;
+	return(0);
 }
 
 /*
@@ -1641,12 +1619,12 @@ hammer_reload_inode(hammer_inode_t ip, void *arg __unused)
 void
 hammer_modify_inode(hammer_transaction_t trans, hammer_inode_t ip, int flags)
 {
-	/*
+	/* 
 	 * ronly of 0 or 2 does not trigger assertion.
-	 * 2 is a special error state
+	 * 2 is a special error state 
 	 */
 	KKASSERT(ip->hmp->ronly != 1 ||
-		  (flags & (HAMMER_INODE_DDIRTY | HAMMER_INODE_XDIRTY |
+		  (flags & (HAMMER_INODE_DDIRTY | HAMMER_INODE_XDIRTY | 
 			    HAMMER_INODE_SDIRTY |
 			    HAMMER_INODE_BUFS | HAMMER_INODE_DELETED |
 			    HAMMER_INODE_ATIME | HAMMER_INODE_MTIME)) == 0);
@@ -1670,6 +1648,47 @@ hammer_modify_inode(hammer_transaction_t trans, hammer_inode_t ip, int flags)
 }
 
 /*
+ * Attempt to quickly update the atime for a hammer inode.  Return 0 on
+ * success, -1 on failure.
+ *
+ * We attempt to update the atime with only the ip lock and not the
+ * whole filesystem lock in order to improve concurrency.  We can only
+ * do this safely if the ATIME flag is already pending on the inode.
+ *
+ * This function is called via a vnops path (ip pointer is stable) without
+ * fs_token held.
+ */
+int
+hammer_update_atime_quick(hammer_inode_t ip)
+{
+	struct timeval tv;
+	int res = -1;
+
+	if ((ip->flags & HAMMER_INODE_RO) ||
+	    (ip->hmp->mp->mnt_flag & MNT_NOATIME)) {
+		/*
+		 * Silently indicate success on read-only mount/snap
+		 */
+		res = 0;
+	} else if (ip->flags & HAMMER_INODE_ATIME) {
+		/*
+		 * Double check with inode lock held against backend.  This
+		 * is only safe if all we need to do is update
+		 * ino_data.atime.
+		 */
+		getmicrotime(&tv);
+		hammer_lock_ex(&ip->lock);
+		if (ip->flags & HAMMER_INODE_ATIME) {
+			ip->ino_data.atime =
+			    (unsigned long)tv.tv_sec * 1000000ULL + tv.tv_usec;
+			res = 0;
+		}
+		hammer_unlock(&ip->lock);
+	}
+	return res;
+}
+
+/*
  * Request that an inode be flushed.  This whole mess cannot block and may
  * recurse (if not synchronous).  Once requested HAMMER will attempt to
  * actively flush the inode until the flush can be done.
@@ -1690,21 +1709,29 @@ hammer_flush_inode(hammer_inode_t ip, int flags)
 	int good;
 
 	/*
-	 * next_flush_group is the first flush group we can place the inode
-	 * in.  It may be NULL.  If it becomes full we append a new flush
-	 * group and make that the next_flush_group.
+	 * fill_flush_group is the first flush group we may be able to
+	 * continue filling, it may be open or closed but it will always
+	 * be past the currently flushing (running) flg.
+	 *
+	 * next_flush_group is the next open flush group.
 	 */
 	hmp = ip->hmp;
-	while ((flg = hmp->next_flush_group) != NULL) {
+	while ((flg = hmp->fill_flush_group) != NULL) {
 		KKASSERT(flg->running == 0);
-		if (flg->total_count + flg->refs <= ip->hmp->undo_rec_limit)
+		if (flg->total_count + flg->refs <= ip->hmp->undo_rec_limit &&
+		    flg->total_count <= hammer_autoflush) {
 			break;
-		hmp->next_flush_group = TAILQ_NEXT(flg, flush_entry);
+		}
+		hmp->fill_flush_group = TAILQ_NEXT(flg, flush_entry);
 		hammer_flusher_async(ip->hmp, flg);
 	}
 	if (flg == NULL) {
 		flg = kmalloc(sizeof(*flg), hmp->m_misc, M_WAITOK|M_ZERO);
-		hmp->next_flush_group = flg;
+		flg->seq = hmp->flusher.next++;
+		if (hmp->next_flush_group == NULL)
+			hmp->next_flush_group = flg;
+		if (hmp->fill_flush_group == NULL)
+			hmp->fill_flush_group = flg;
 		RB_INIT(&flg->flush_tree);
 		TAILQ_INSERT_TAIL(&hmp->flush_group_list, flg, flush_entry);
 	}
@@ -1730,7 +1757,7 @@ hammer_flush_inode(hammer_inode_t ip, int flags)
 	/*
 	 * Our flush action will depend on the current state.
 	 */
-	switch (ip->flush_state) {
+	switch(ip->flush_state) {
 	case HAMMER_FST_IDLE:
 		/*
 		 * We have no dependancies and can flush immediately.  Some
@@ -1752,7 +1779,7 @@ hammer_flush_inode(hammer_inode_t ip, int flags)
 
 		if (good >= 0) {
 			/*
-			 * We can continue if good >= 0.  Determine how
+			 * We can continue if good >= 0.  Determine how 
 			 * many records under our inode can be flushed (and
 			 * mark them).
 			 */
@@ -1817,10 +1844,11 @@ hammer_setup_parent_inodes(hammer_inode_t ip, int depth,
 	 * not be anything to wakeup (ip).
 	 */
 	if (depth == 20 && TAILQ_FIRST(&ip->target_list)) {
-		kprintf("HAMMER Warning: depth limit reached on "
-			"setup recursion, inode %p %016llx\n",
-			ip, (long long)ip->obj_id);
-		return -2;
+		kprintf(&hammer_gen_krate,
+			    "HAMMER Warning: depth limit reached on "
+			    "setup recursion, inode %p %016llx\n",
+			    ip, (long long)ip->obj_id);
+		return(-2);
 	}
 
 	/*
@@ -1842,9 +1870,8 @@ hammer_setup_parent_inodes(hammer_inode_t ip, int depth,
 		if (r == -2)
 			break;
 	}
-	return good;
+	return(good);
 }
-
 
 /*
  * This helper function takes a record representing the dependancy between
@@ -1852,13 +1879,13 @@ hammer_setup_parent_inodes(hammer_inode_t ip, int depth,
  *
  * record->ip		= parent inode
  * record->target_ip	= child inode
- *
+ * 
  * We are asked to recurse upwards and convert the record from SETUP
  * to FLUSH if possible.
  *
  * Return 1 if the record gives us connectivity
  *
- * Return 0 if the record is not relevant
+ * Return 0 if the record is not relevant 
  *
  * Return -1 if we can't resolve the dependancy and there is no connectivity.
  */
@@ -1866,18 +1893,16 @@ static int
 hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 				  hammer_flush_group_t flg)
 {
-	/* hammer_mount_t hmp; */
 	hammer_inode_t pip;
 	int good;
 
 	KKASSERT(record->flush_state != HAMMER_FST_IDLE);
 	pip = record->ip;
-	/* hmp = pip->hmp; */
 
 	/*
 	 * If the record is already flushing, is it in our flush group?
 	 *
-	 * If it is in our flush group but it is a general record or a
+	 * If it is in our flush group but it is a general record or a 
 	 * delete-on-disk, it does not improve our connectivity (return 0),
 	 * and if the target inode is not trying to destroy itself we can't
 	 * allow the operation yet anyway (the second return -1).
@@ -1890,7 +1915,7 @@ hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 		if (record->flush_group != flg) {
 			pip->flags |= HAMMER_INODE_REFLUSH;
 			record->target_ip->flags |= HAMMER_INODE_CONN_DOWN;
-			return -1;
+			return(-1);
 		}
 
 		/*
@@ -1899,8 +1924,8 @@ hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 		 * visibility or not.
 		 */
 		if (record->type == HAMMER_MEM_RECORD_ADD)
-			return 1;
-		return 0;
+			return(1);
+		return(0);
 	}
 
 	/*
@@ -1926,7 +1951,7 @@ hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 	if (good < 0) {
 		pip->flags |= HAMMER_INODE_REFLUSH;
 		record->target_ip->flags |= HAMMER_INODE_CONN_DOWN;
-		return good;
+		return(good);
 	}
 
 	/*
@@ -1947,16 +1972,15 @@ hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 	 */
 	if (record->flush_state == HAMMER_FST_FLUSH) {
 		if (record->type == HAMMER_MEM_RECORD_ADD)
-			return 1;
-		return 0;
+			return(1);
+		return(0);
 	}
 
 	KKASSERT(record->flush_state == HAMMER_FST_SETUP);
 
 #if 0
 	if (record->type == HAMMER_MEM_RECORD_DEL &&
-	    (record->target_ip->flags &
-			(HAMMER_INODE_DELETED|HAMMER_INODE_DELONDISK)) == 0) {
+	    (record->target_ip->flags & (HAMMER_INODE_DELETED|HAMMER_INODE_DELONDISK)) == 0) {
 		/*
 		 * Regardless of flushing state we cannot sync this path if the
 		 * record represents a delete-on-disk but the target inode
@@ -1967,7 +1991,7 @@ hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 		 * just leave the DEL record to rot.
 		 */
 		record->target_ip->flags |= HAMMER_INODE_REFLUSH;
-		return -1;
+		return(-1);
 	} else
 #endif
 	if (pip->flush_group == flg) {
@@ -1984,13 +2008,13 @@ hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 		/*
 		 * A general directory-add contributes to our visibility.
 		 *
-		 * Otherwise it is probably a directory-delete or
+		 * Otherwise it is probably a directory-delete or 
 		 * delete-on-disk record and does not contribute to our
 		 * visbility (but we can still flush it).
 		 */
 		if (record->type == HAMMER_MEM_RECORD_ADD)
-			return 1;
-		return 0;
+			return(1);
+		return(0);
 	} else {
 		/*
 		 * If the parent is not in our flush group we cannot
@@ -2000,7 +2024,7 @@ hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 		 */
 		pip->flags |= HAMMER_INODE_REFLUSH;
 		record->target_ip->flags |= HAMMER_INODE_CONN_DOWN;
-		return -1;
+		return(-1);
 	}
 }
 
@@ -2010,6 +2034,7 @@ hammer_setup_parent_inodes_helper(hammer_record_t record, int depth,
 static void
 hammer_flush_inode_core(hammer_inode_t ip, hammer_flush_group_t flg, int flags)
 {
+	hammer_mount_t hmp = ip->hmp;
 	int go_count;
 
 	/*
@@ -2022,23 +2047,11 @@ hammer_flush_inode_core(hammer_inode_t ip, hammer_flush_group_t flg, int flags)
 		hammer_ref(&ip->lock);
 	ip->flush_state = HAMMER_FST_FLUSH;
 	ip->flush_group = flg;
-	++ip->hmp->flusher.group_lock;
-	++ip->hmp->count_iqueued;
+	++hmp->flusher.group_lock;
+	++hmp->count_iqueued;
 	++hammer_count_iqueued;
 	++flg->total_count;
 	hammer_redo_fifo_start_flush(ip);
-
-	/*
-	 * If the flush group reaches the autoflush limit we want to signal
-	 * the flusher.  This is particularly important for remove()s.
-	 *
-	 * If the default hammer_limit_reclaim is changed via sysctl
-	 * make sure we don't hit a degenerate case where we don't start
-	 * a flush but blocked on further inode ops.
-	 */
-	if (flg->total_count == hammer_autoflush ||
-	    flg->total_count >= hammer_limit_reclaim / 4)
-		flags |= HAMMER_FLUSH_SIGNAL;
 
 #if 0
 	/*
@@ -2101,12 +2114,18 @@ hammer_flush_inode_core(hammer_inode_t ip, hammer_flush_group_t flg, int flags)
 	 */
 	if (go_count == 0) {
 		if ((ip->flags & HAMMER_INODE_MODMASK_NOXDIRTY) == 0) {
-			--ip->hmp->count_iqueued;
+			--hmp->count_iqueued;
 			--hammer_count_iqueued;
 
 			--flg->total_count;
 			ip->flush_state = HAMMER_FST_SETUP;
 			ip->flush_group = NULL;
+			if (flags & HAMMER_FLUSH_SIGNAL) {
+				ip->flags |= HAMMER_INODE_REFLUSH |
+					     HAMMER_INODE_RESIGNAL;
+			} else {
+				ip->flags |= HAMMER_INODE_REFLUSH;
+			}
 #if 0
 			if (ip->flags & HAMMER_INODE_VHELD) {
 				ip->flags &= ~HAMMER_INODE_VHELD;
@@ -2119,12 +2138,8 @@ hammer_flush_inode_core(hammer_inode_t ip, hammer_flush_group_t flg, int flags)
 			 * when an inode is in SETUP.
 			 */
 			ip->flags |= HAMMER_INODE_REFLUSH;
-			if (flags & HAMMER_FLUSH_SIGNAL) {
-				ip->flags |= HAMMER_INODE_RESIGNAL;
-				hammer_flusher_async(ip->hmp, flg);
-			}
-			if (--ip->hmp->flusher.group_lock == 0)
-				wakeup(&ip->hmp->flusher.group_lock);
+			if (--hmp->flusher.group_lock == 0)
+				wakeup(&hmp->flusher.group_lock);
 			return;
 		}
 	}
@@ -2171,11 +2186,19 @@ hammer_flush_inode_core(hammer_inode_t ip, hammer_flush_group_t flg, int flags)
 	 */
 	KKASSERT(flg->running == 0);
 	RB_INSERT(hammer_fls_rb_tree, &flg->flush_tree, ip);
-	if (--ip->hmp->flusher.group_lock == 0)
-		wakeup(&ip->hmp->flusher.group_lock);
+	if (--hmp->flusher.group_lock == 0)
+		wakeup(&hmp->flusher.group_lock);
 
-	if (flags & HAMMER_FLUSH_SIGNAL)
-		hammer_flusher_async(ip->hmp, flg);
+	/*
+	 * Auto-flush the group if it grows too large.  Make sure the
+	 * inode reclaim wait pipeline continues to work.
+	 */
+	if (flg->total_count >= hammer_autoflush ||
+	    flg->total_count >= hammer_limit_reclaims / 4) {
+		if (hmp->fill_flush_group == flg)
+			hmp->fill_flush_group = TAILQ_NEXT(flg, flush_entry);
+		hammer_flusher_async(hmp, flg);
+	}
 }
 
 /*
@@ -2195,7 +2218,6 @@ hammer_setup_child_callback(hammer_record_t rec, void *data)
 	hammer_flush_group_t flg;
 	hammer_inode_t target_ip;
 	hammer_inode_t ip;
-
 	int r;
 
 	/*
@@ -2219,7 +2241,7 @@ hammer_setup_child_callback(hammer_record_t rec, void *data)
 		} else {
 			r = 0;
 		}
-		return r;
+		return(r);
 	}
 
 	/*
@@ -2230,7 +2252,7 @@ hammer_setup_child_callback(hammer_record_t rec, void *data)
 	flg = ip->flush_group;
 	r = 0;
 
-	switch (rec->flush_state) {
+	switch(rec->flush_state) {
 	case HAMMER_FST_IDLE:
 		/*
 		 * The record has no setup dependancy, we can flush it.
@@ -2266,13 +2288,12 @@ hammer_setup_child_callback(hammer_record_t rec, void *data)
 		 * this is a DEL.
 		 */
 		if (target_ip->flush_state == HAMMER_FST_FLUSH) {
-			/* if (rec->flush_state == HAMMER_MEM_RECORD_ADD) */
-			if (rec->flush_state == HAMMER_FST_FLUSH)
+			if (rec->type == HAMMER_MEM_RECORD_ADD)
 				ip->flags |= HAMMER_INODE_REFLUSH;
 			else
 				target_ip->flags |= HAMMER_INODE_REFLUSH;
 			break;
-		}
+		} 
 
 		/*
 		 * Target IP is not yet flushing.  This can get complex
@@ -2344,14 +2365,25 @@ hammer_setup_child_callback(hammer_record_t rec, void *data)
 		}
 		break;
 	case HAMMER_FST_FLUSH:
-		/*
-		 * The flush_group should already match.
+		/* 
+		 * The record could be part of a previous flush group if the
+		 * inode is a directory (the record being a directory entry).
+		 * Once the flush group was closed a hammer_test_inode()
+		 * function can cause a new flush group to be setup, placing
+		 * the directory inode itself in a new flush group.
+		 *
+		 * When associated with a previous flush group we count it
+		 * as if it were in our current flush group, since it will
+		 * effectively be flushed by the time we flush our current
+		 * flush group.
 		 */
-		KKASSERT(rec->flush_group == flg);
+		KKASSERT(
+		    rec->ip->ino_data.obj_type == HAMMER_OBJTYPE_DIRECTORY ||
+		    rec->flush_group == flg);
 		r = 1;
 		break;
 	}
-	return r;
+	return(r);
 }
 
 #if 0
@@ -2364,14 +2396,14 @@ hammer_syncgrp_child_callback(hammer_record_t rec, void *data)
 {
 	hammer_inode_t ip = rec->ip;
 
-	switch (rec->flush_state) {
+	switch(rec->flush_state) {
 	case HAMMER_FST_FLUSH:
 		KKASSERT(rec->flush_group == ip->flush_group);
 		break;
 	default:
 		break;
 	}
-	return 0;
+	return(0);
 }
 #endif
 
@@ -2383,19 +2415,63 @@ hammer_syncgrp_child_callback(hammer_record_t rec, void *data)
 void
 hammer_wait_inode(hammer_inode_t ip)
 {
-	/* hammer_flush_group_t flg; */
+	/*
+	 * The inode can be in a SETUP state in which case RESIGNAL
+	 * should be set.  If RESIGNAL is not set then the previous
+	 * flush completed and a later operation placed the inode
+	 * in a passive setup state again, so we're done.
+	 *
+	 * The inode can be in a FLUSH state in which case we
+	 * can just wait for completion.
+	 */
+	while (ip->flush_state == HAMMER_FST_FLUSH ||
+	    (ip->flush_state == HAMMER_FST_SETUP &&
+	     (ip->flags & HAMMER_INODE_RESIGNAL))) {
+		/*
+		 * Don't try to flush on a critical error
+		 */
+		if (ip->hmp->flags & HAMMER_MOUNT_CRITICAL_ERROR)
+			break;
 
-	if ((ip->hmp->flags & HAMMER_MOUNT_CRITICAL_ERROR) == 0) {
-		while (ip->flush_state != HAMMER_FST_IDLE &&
-		       (ip->hmp->flags & HAMMER_MOUNT_CRITICAL_ERROR) == 0) {
-			if (ip->flush_state == HAMMER_FST_SETUP)
-				hammer_flush_inode(ip, HAMMER_FLUSH_SIGNAL);
-			if (ip->flush_state != HAMMER_FST_IDLE) {
-				ip->flags |= HAMMER_INODE_FLUSHW;
-				tsleep(&ip->flags, 0, "hmrwin", 0);
+		/*
+		 * If the inode was already being flushed its flg
+		 * may not have been queued to the backend.  We
+		 * have to make sure it gets queued or we can wind
+		 * up blocked or deadlocked (particularly if we are
+		 * the vnlru thread).
+		 */
+		if (ip->flush_state == HAMMER_FST_FLUSH) {
+			KKASSERT(ip->flush_group);
+			if (ip->flush_group->closed == 0) {
+				if (hammer_debug_inode) {
+					kprintf("hammer: debug: forcing "
+						"async flush ip %016jx\n",
+						(intmax_t)ip->obj_id);
+				}
+				hammer_flusher_async(ip->hmp,
+						     ip->flush_group);
+				continue; /* retest */
 			}
 		}
+
+		/*
+		 * In a flush state with the flg queued to the backend
+		 * or in a setup state with RESIGNAL set, we can safely
+		 * wait.
+		 */
+		ip->flags |= HAMMER_INODE_FLUSHW;
+		tsleep(&ip->flags, 0, "hmrwin", 0);
 	}
+
+#if 0
+	/*
+	 * The inode may have been in a passive setup state,
+	 * call flush to make sure we get signaled.
+	 */
+	if (ip->flush_state == HAMMER_FST_SETUP)
+		hammer_flush_inode(ip, HAMMER_FLUSH_SIGNAL);
+#endif
+
 }
 
 /*
@@ -2441,9 +2517,9 @@ hammer_flush_inode_done(hammer_inode_t ip, int error)
 	/*
 	 * Fix up the dirty buffer status.
 	 */
-	if (ip->vp && RB_ROOT(&ip->vp->v_rbdirty_tree))
+	if (ip->vp && RB_ROOT(&ip->vp->v_rbdirty_tree)) {
 		ip->flags |= HAMMER_INODE_BUFS;
-
+	}
 	hammer_redo_fifo_end_flush(ip);
 
 	/*
@@ -2556,6 +2632,8 @@ hammer_flush_inode_done(hammer_inode_t ip, int error)
 		--hmp->rsv_inodes;
 	}
 
+	ip->flags &= ~HAMMER_INODE_SLAVEFLUSH;
+
 	if (dorel)
 		hammer_rel_inode(ip, 0);
 }
@@ -2577,16 +2655,14 @@ hammer_sync_record_callback(hammer_record_t record, void *data)
 	 */
 	++hammer_stats_record_iterations;
 	if (record->flush_state != HAMMER_FST_FLUSH)
-		return 0;
+		return(0);
 
 #if 1
 	if (record->flush_group != record->ip->flush_group) {
-		kprintf("sync_record %p ip %p bad flush group %p %p\n",
-			record, record->ip,
-			record->flush_group, record->ip->flush_group);
+		kprintf("sync_record %p ip %p bad flush group %p %p\n", record, record->ip, record->flush_group ,record->ip->flush_group);
 		if (hammer_debug_critical)
 			Debugger("blah2");
-		return 0;
+		return(0);
 	}
 #endif
 	KKASSERT(record->flush_group == record->ip->flush_group);
@@ -2596,7 +2672,7 @@ hammer_sync_record_callback(hammer_record_t record, void *data)
 	 * frontend cannot change the state of FE.
 	 *
 	 * NOTE: If FE is set prior to us setting BE we still sync the
-	 * record out, but the flush completion code converts it to
+	 * record out, but the flush completion code converts it to 
 	 * a delete-on-disk record instead of destroying it.
 	 */
 	KKASSERT((record->flags & HAMMER_RECF_INTERLOCK_BE) == 0);
@@ -2611,7 +2687,7 @@ hammer_sync_record_callback(hammer_record_t record, void *data)
 	}
 
 	/*
-	 * If the whole inode is being deleting all on-disk records will
+	 * If the whole inode is being deleted and all on-disk records will
 	 * be deleted very soon, we can't sync any new records to disk
 	 * because they will be deleted in the same transaction they were
 	 * created in (delete_tid == create_tid), which will assert.
@@ -2620,7 +2696,7 @@ hammer_sync_record_callback(hammer_record_t record, void *data)
 	 * that we currently panic on.
 	 */
 	if (record->ip->sync_flags & HAMMER_INODE_DELETING) {
-		switch (record->type) {
+		switch(record->type) {
 		case HAMMER_MEM_RECORD_DATA:
 			/*
 			 * We don't have to do anything, if the record was
@@ -2647,7 +2723,7 @@ hammer_sync_record_callback(hammer_record_t record, void *data)
 			      "sync inode record %p?", record);
 			break; /* NOT REACHED */
 		case HAMMER_MEM_RECORD_DEL:
-			/*
+			/* 
 			 * Follow through and issue the on-disk deletion
 			 */
 			break;
@@ -2721,6 +2797,7 @@ hammer_sync_record_callback(hammer_record_t record, void *data)
 				     NULL,
 				     record->leaf.data_len);
 	}
+
 	for (;;) {
 		error = hammer_ip_sync_record_cursor(cursor, record);
 		if (error != EDEADLK)
@@ -2748,13 +2825,13 @@ done:
 	 *
 	 * WARNING: See warnings in hammer_unlock_cursor() function.
 	 */
-	if (hammer_flusher_meta_limit(hmp)) {
+        if (hammer_flusher_meta_limit(hmp) ||
+	    vm_page_count_severe()) {
 		hammer_unlock_cursor(cursor);
-		hammer_flusher_finalize(trans, 0);
+                hammer_flusher_finalize(trans, 0);
 		hammer_lock_cursor(cursor);
 	}
-
-	return error;
+	return(error);
 }
 
 /*
@@ -2771,7 +2848,7 @@ hammer_sync_inode(hammer_transaction_t trans, hammer_inode_t ip)
 	u_int64_t nlinks;
 
 	if ((ip->sync_flags & HAMMER_INODE_MODMASK) == 0)
-		return 0;
+		return(0);
 
 	error = hammer_init_cursor(trans, &cursor, &ip->cache[1], ip);
 	if (error)
@@ -2820,7 +2897,7 @@ hammer_sync_inode(hammer_transaction_t trans, hammer_inode_t ip)
 			 * queued the record).
 			 */
 			KKASSERT((depend->flags & HAMMER_RECF_DELETED_BE) == 0);
-			switch (depend->type) {
+			switch(depend->type) {
 			case HAMMER_MEM_RECORD_ADD:
 				--nlinks;
 				break;
@@ -3010,7 +3087,7 @@ defer_buffer_flush:
 	 * inode to satisfy visibility requirements if there happen to be
 	 * directory dependancies.
 	 */
-	switch (ip->flags & (HAMMER_INODE_DELETED | HAMMER_INODE_ONDISK)) {
+	switch(ip->flags & (HAMMER_INODE_DELETED | HAMMER_INODE_ONDISK)) {
 	case HAMMER_INODE_DELETED|HAMMER_INODE_ONDISK:
 		/*
 		 * If deleted and on-disk, don't set any additional flags.
@@ -3076,7 +3153,7 @@ defer_buffer_flush:
 	 */
 	if (ip->flags & HAMMER_INODE_DELETED) {
 		error = hammer_update_inode(&cursor, ip);
-	} else
+	} else 
 	if (!(ip->sync_flags & (HAMMER_INODE_DDIRTY | HAMMER_INODE_SDIRTY)) &&
 	    (ip->sync_flags & (HAMMER_INODE_ATIME | HAMMER_INODE_MTIME))) {
 		error = hammer_update_itimes(&cursor, ip);
@@ -3088,11 +3165,10 @@ defer_buffer_flush:
 done:
 	if (error) {
 		hammer_critical_error(ip->hmp, ip, error,
-				"while syncing inode");
+				      "while syncing inode");
 	}
 	hammer_done_cursor(&cursor);
-	return error;
-
+	return(error);
 }
 
 /*
@@ -3124,8 +3200,7 @@ hammer_inode_unloadable_check(hammer_inode_t ip, int getvp)
 	 * Do not attempt to modify a snapshot inode (one set to read-only).
 	 */
 	if (ip->ino_data.nlinks == 0 &&
-	    ((ip->flags | ip->sync_flags) &
-		(HAMMER_INODE_RO|HAMMER_INODE_DELETING|HAMMER_INODE_DELETED)) == 0) {
+	    ((ip->flags | ip->sync_flags) & (HAMMER_INODE_RO|HAMMER_INODE_DELETING|HAMMER_INODE_DELETED)) == 0) {
 		ip->flags |= HAMMER_INODE_DELETING;
 		ip->flags |= HAMMER_INODE_TRUNCATED;
 		ip->trunc_off = 0;
@@ -3138,10 +3213,10 @@ hammer_inode_unloadable_check(hammer_inode_t ip, int getvp)
 		/*
 		 * Final cleanup
 		 */
-		/* XXX if (ip->vp)
-			nvtruncbuf(ip->vp, 0, HAMMER_BUFSIZE, 0);
+		if (ip->vp)
+			nvtruncbuf(ip->vp, 0, HAMMER_BUFSIZE, 0, 0);
 		if (getvp)
-			vput(vp); */
+			vput(vp);
 	}
 }
 
@@ -3182,19 +3257,17 @@ hammer_inode_wakereclaims(hammer_inode_t ip)
 	if ((ip->flags & HAMMER_INODE_RECLAIM) == 0)
 		return;
 
-		--hammer_count_reclaiming;
-		--hmp->inode_reclaims;
-		ip->flags &= ~HAMMER_INODE_RECLAIM;
+	--hammer_count_reclaims;
+	--hmp->count_reclaims;
+	ip->flags &= ~HAMMER_INODE_RECLAIM;
 
-		while ((reclaim = TAILQ_FIRST(&hmp->reclaim_list)) != NULL) {
-			if (reclaim->count > 0 && --reclaim->count == 0) {
-				TAILQ_REMOVE(&hmp->reclaim_list,
-					reclaim, entry);
-				wakeup(reclaim);
-			}
-			if (hmp->inode_reclaims > hammer_limit_reclaim / 2)
-				break;
+	if ((reclaim = TAILQ_FIRST(&hmp->reclaim_list)) != NULL) {
+		KKASSERT(reclaim->count > 0);
+		if (--reclaim->count == 0) {
+			TAILQ_REMOVE(&hmp->reclaim_list, reclaim, entry);
+			wakeup(reclaim);
 		}
+	}
 }
 
 /*
@@ -3203,45 +3276,47 @@ hammer_inode_wakereclaims(hammer_inode_t ip)
  * if a new inode is created or an inode is loaded from media.
  *
  * When we block we don't care *which* inode has finished reclaiming,
- * as lone as one does.
+ * as long as one does.
+ *
+ * The reclaim pipeline is primarily governed by the auto-flush which is
+ * 1/4 hammer_limit_reclaims.  We don't want to block if the count is
+ * less than 1/2 hammer_limit_reclaims.  From 1/2 to full count is
+ * dynamically governed.
  */
 void
 hammer_inode_waitreclaims(hammer_transaction_t trans)
 {
 	hammer_mount_t hmp = trans->hmp;
 	struct hammer_reclaim reclaim;
+	int lower_limit;
 
 	/*
-	* Track inode load
-	*/
-	/* if (curthread->td_proc) {
+	 * Track inode load, delay if the number of reclaiming inodes is
+	 * between 2/4 and 4/4 hammer_limit_reclaims, depending.
+	 */
+	if (curthread->td_proc) {
 		struct hammer_inostats *stats;
-		int lower_limit;
 
 		stats = hammer_inode_inostats(hmp, curthread->td_proc->p_pid);
 		++stats->count;
 
-		if (stats->count > hammer_limit_reclaim / 2)
-			stats->count = hammer_limit_reclaim / 2;
-			lower_limit = hammer_limit_reclaim - stats->count;
-			if (hammer_debug_general & 0x10000)
+		if (stats->count > hammer_limit_reclaims / 2)
+			stats->count = hammer_limit_reclaims / 2;
+		lower_limit = hammer_limit_reclaims - stats->count;
+		if (hammer_debug_general & 0x10000) {
 			kprintf("pid %5d limit %d\n",
 				(int)curthread->td_proc->p_pid, lower_limit);
-
-				if (hmp->inode_reclaims < lower_limit)
-					return;
-		} else { */
-	/*
-	* Default mode
-	*/
-	if (hmp->inode_reclaims < hammer_limit_reclaim)
-		return;
-	/* } */
-	reclaim.count = 1;
-	TAILQ_INSERT_TAIL(&hmp->reclaim_list, &reclaim, entry);
-	tsleep(&reclaim, 0, "hmrrcm", hz);
-	if (reclaim.count > 0)
-		TAILQ_REMOVE(&hmp->reclaim_list, &reclaim, entry);
+		}
+	} else {
+		lower_limit = hammer_limit_reclaims * 3 / 4;
+	}
+	if (hmp->count_reclaims >= lower_limit) {
+		reclaim.count = 1;
+		TAILQ_INSERT_TAIL(&hmp->reclaim_list, &reclaim, entry);
+		tsleep(&reclaim, 0, "hmrrcm", hz);
+		if (reclaim.count > 0)
+			TAILQ_REMOVE(&hmp->reclaim_list, &reclaim, entry);
+	}
 }
 
 /*
@@ -3254,15 +3329,14 @@ hammer_inode_waitreclaims(hammer_transaction_t trans)
  *	 entries under certain types of heavy filesystem activity and
  *	 wind up not delaying long enough.
  */
-#if 0
 static
 struct hammer_inostats *
 hammer_inode_inostats(hammer_mount_t hmp, pid_t pid)
 {
 	struct hammer_inostats *stats;
-	int delta, ticks;
+	int delta;
 	int chain;
-	static int iterator; /* we don't care about MP races */
+	static volatile int iterator;	/* we don't care about MP races */
 
 	/*
 	 * Chain up to 4 times to find our entry.
@@ -3295,9 +3369,8 @@ hammer_inode_inostats(hammer_mount_t hmp, pid_t pid)
 	}
 	if (hammer_debug_general & 0x10000)
 		kprintf("pid %5d stats %d\n", (int)pid, stats->count);
-	return stats;
+	return (stats);
 }
-#endif
 
 #if 0
 
@@ -3324,13 +3397,13 @@ hammer_inode_waithard(hammer_mount_t hmp)
 	 * Hysteresis.
 	 */
 	if (hmp->flags & HAMMER_MOUNT_FLUSH_RECOVERY) {
-		if (hmp->inode_reclaims < HAMMER_RECLAIM_WAIT / 2 &&
+		if (hmp->count_reclaims < hammer_limit_reclaims / 2 &&
 		    hmp->count_iqueued < hmp->count_inodes / 20) {
 			hmp->flags &= ~HAMMER_MOUNT_FLUSH_RECOVERY;
 			return;
 		}
 	} else {
-		if (hmp->inode_reclaims < HAMMER_RECLAIM_WAIT ||
+		if (hmp->count_reclaims < hammer_limit_reclaims ||
 		    hmp->count_iqueued < hmp->count_inodes / 10) {
 			return;
 		}
@@ -3342,4 +3415,5 @@ hammer_inode_waithard(hammer_mount_t hmp)
 	 */
 	hammer_flusher_wait_next(hmp);
 }
+
 #endif

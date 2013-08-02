@@ -107,7 +107,7 @@ struct hammer_cursor {
 	 * Iteration and extraction control variables
 	 */
 	int flags;
-        int rec_generation;
+	int rec_generation;
 
 	/*
 	 * Merged in-memory/on-disk iterations also use these fields.
@@ -141,6 +141,7 @@ typedef struct hammer_cursor *hammer_cursor_t;
 #define HAMMER_CURSOR_TRACKED_RIPOUT	0x00080000
 #define HAMMER_CURSOR_LASTWASMEM	0x00100000 /* hammer_ip_next logic */
 #define HAMMER_CURSOR_ITERATE_CHECK	0x00200000
+#define HAMMER_CURSOR_NOSWAPCACHE	0x00400000 /* applies to LARGE_DATA */
 
 /*
  * Flags we can clear when reusing a cursor (we can clear all of them)

@@ -57,16 +57,17 @@ typedef int		__boolean_t;
  * This mess is to override compiler options that might restrict long long
  * and for lint which doesn't understand GNUC attributes.
  */
-#if defined(lint)
+/*#if defined(lint)
 typedef	long long		__int64_t;
 typedef	unsigned long long	__uint64_t;
 #elif defined(__GNUC__)
 typedef	int __attribute__((__mode__(__DI__)))		__int64_t;
 typedef	unsigned int __attribute__((__mode__(__DI__)))	__uint64_t;
 #else
+*/
 typedef	long long		__int64_t;
 typedef	unsigned long long	__uint64_t;
-#endif
+/* #endif */
 
 /*
  * Standard type definitions.

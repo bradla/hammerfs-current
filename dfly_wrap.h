@@ -20,6 +20,10 @@
 #include <linux/string.h> // for memcmp, memcpy, memset
 #include <linux/buffer_head.h> // for brelse
 
+#ifndef _SYS_UUID_H_
+#include "dfly/sys/uuid.h"
+#endif
+
 /*
  * required DragonFly BSD definitions
  */
@@ -27,8 +31,26 @@
 // indicate we are in kernel
 #define _KERNEL 1
 
+#define atomic_add_ptr(p, v) \
+	atomic_add_long((volatile u_long *)(p), (u_long)(v))
+#define atomic_add_acq_ptr(p, v) \
+	atomic_add_acq_long((volatile u_long *)(p), (u_long)(v))
+#define atomic_add_rel_ptr(p, v) \
+	atomic_add_rel_long((volatile u_long *)(p), (u_long)(v))
+//#define atomic_add_int(p, v)		atomic_add(p, v)
+#define atomic_add_int                  atomic_add
+#define atomic_subtract_int		atomic_sub
+#define	atomic_add_acq_int		atomic_add_int
+#define	atomic_add_rel_int		atomic_add_int
+#define	atomic_subtract_32	atomic_subtract_int
+
 // from sys/cdefs.h
 #define __unused
+#define MAXCPUFIFO      32	/* power of 2 */
+#define MAXCPUFIFO_MASK	(MAXCPUFIFO - 1)
+#define LWKT_MAXTOKENS	32	/* max tokens beneficially held by thread */
+#define td_toks_end		td_toks_array[LWKT_MAXTOKENS]
+#define td_toks_base		td_toks_array[0]
 
 // from sys/dirent.h
 #define DT_DBF	15		/* database record file*/
@@ -82,15 +104,58 @@ void *dfly_kmalloc (unsigned long size, struct malloc_type *type, int flags);
 
 // from sys/proc.h
 #define PRISON_ROOT     0x1
+#define TOK_EXCLUSIVE	0x00000001	/* Exclusive lock held */
+#define TOK_EXCLREQ	0x00000002	/* Exclusive request pending */
+#define TOK_INCR	4		/* Shared count increment */
+#define TOK_COUNTMASK	(~(long)(TOK_EXCLUSIVE|TOK_EXCLREQ))
 
+#define TOKEN_STRING	"REF=%p TOK=%p TD=%p"
+#define TOKEN_ARGS	lwkt_tokref_t ref, lwkt_token_t tok, struct thread *td
+#define CONTENDED_STRING	TOKEN_STRING " (contention started)"
+#define UNCONTENDED_STRING	TOKEN_STRING " (contention stopped)"
+#if !defined(KTR_TOKENS)
+#define	KTR_TOKENS	KTR_ALL
+#endif
+
+#if 0
+KTR_INFO(KTR_TOKENS, tokens, release, 2, TOKEN_STRING, TOKEN_ARGS);
+KTR_INFO(KTR_TOKENS, tokens, remote, 3, TOKEN_STRING, TOKEN_ARGS);
+KTR_INFO(KTR_TOKENS, tokens, reqremote, 4, TOKEN_STRING, TOKEN_ARGS);
+KTR_INFO(KTR_TOKENS, tokens, reqfail, 5, TOKEN_STRING, TOKEN_ARGS);
+KTR_INFO(KTR_TOKENS, tokens, drain, 6, TOKEN_STRING, TOKEN_ARGS);
+KTR_INFO(KTR_TOKENS, tokens, contention_start, 7, CONTENDED_STRING, TOKEN_ARGS);
+KTR_INFO(KTR_TOKENS, tokens, contention_stop, 7, UNCONTENDED_STRING, TOKEN_ARGS);
+#endif
+
+#define logtoken(name, ref)						\
+	KTR_LOG(tokens_ ## name, ref, ref->tr_tok, curthread)
 struct lwp {};
 
 // from sys/thread.h
+typedef struct lwkt_token       *lwkt_token_t;
+typedef struct lwkt_tokref      *lwkt_tokref_t;
+
+struct lwkt_tokref {
+    lwkt_token_t        tr_tok;         /* token in question */
+    long                tr_count;       /* TOK_EXCLUSIVE|TOK_EXCLREQ or 0 */
+    struct thread       *tr_owner;      /* me */
+};
+
+typedef struct lwkt_token {
+    long                t_count;        /* Shared/exclreq/exclusive access */
+    struct lwkt_tokref  *t_ref;         /* Exclusive ref */
+    long                t_collisions;   /* Collision counter */
+    const char          *t_desc;        /* Descriptive name */
+} lwkt_token;
+
+
 #define crit_enter()
 #define crit_exit()
 
 struct thread {
     struct lwp  *td_lwp;        /* (optional) associated lwp */
+    lwkt_tokref_t td_toks_stop;		/* tokens we want */
+    struct lwkt_tokref td_toks_array[LWKT_MAXTOKENS];
 };
 typedef struct thread *thread_t;
 
@@ -126,7 +191,18 @@ struct statvfs {
     long    f_blocks;               /* total data blocks in file system */
 };
 
+/*
+ * Initialize a lock.
+ */
+#define BUF_LOCKINIT(bp) \
+	lockinit(&(bp)->b_lock, buf_wmesg, 0, 0)
+
 // from sys/buf.h
+#define FINDBLK_TEST      0x0010  /* test only, do not lock */
+#define FINDBLK_NBLOCK  0x0020  /* use non-blocking lock, can return NULL */
+#define FINDBLK_REF	0x0040	/* ref the buf to prevent reuse */
+#define NBUF_BIO	6
+
 struct buf {
 off_t	b_offset;		/* Offset into file */
 					/* Function to call upon completion. */
@@ -136,7 +212,18 @@ int	b_error;		/* Errno value. */
 long	b_flags;		/* B_* flags. */
 unsigned long    b_bcount;
     caddr_t b_data;                 /* Memory, superblocks, indirect etc. */
+	atomic_t	b_refs;			/* FINDBLK_REF/bqhold()/bqdrop() */
+	struct vnode *b_vp;		/* (vp, loffset) index */
+	struct bio b_bio_array[NBUF_BIO]; /* BIO translation layers */ 
 };
+
+/*
+ * XXX temporary
+ */
+#define b_bio1		b_bio_array[0]	/* logical layer */
+#define b_bio2		b_bio_array[1]	/* (typically) the disk layer */
+//#define b_loffset	b_bio1.bi_io_vec.bv_offset
+
 struct vnode;
 int bread (struct super_block*, off_t, int, struct buf **);
 #ifndef _LINUX_BUFFER_HEAD_H
@@ -174,16 +261,69 @@ enum uio_seg {
 };
 
 // from sys/vfscache.h
-struct vattr {};
-enum vtype { VNON, VREG, VDIR, VBLK, VCHR, VLNK, VSOCK, VFIFO, VBAD, VDATABASE };
+//struct vattr {};
+
+/*
+ * Vnode types.  VNON means no type or transitory type.  VINT is used
+ * for internal types.  Note that VNON is skipped by the vnode scan.
+ */
+enum vtype	{ VNON, VREG, VDIR, VBLK, VCHR, VLNK, VSOCK, VFIFO, VBAD,
+		  VDATABASE, VINT };
+/*
+ * Vnode tag types.
+ * These are for the benefit of external programs only (e.g., pstat)
+ * and should NEVER be inspected by the kernel.
+ */
+enum vtagtype	{
+	VT_NON, VT_UFS, VT_NFS, VT_MFS, VT_PC, VT_LFS, VT_LOFS, VT_FDESC,
+	VT_PORTAL, VT_NULL, VT_UNUSED10, VT_KERNFS, VT_PROCFS, VT_AFS,
+	VT_ISOFS, VT_UNION, VT_MSDOSFS, VT_TFS, VT_VFS, VT_CODA, VT_NTFS,
+	VT_HPFS, VT_NWFS, VT_SMBFS, VT_UDF, VT_EXT2FS, VT_SYNTH,
+	VT_HAMMER, VT_HAMMER2, VT_DEVFS, VT_TMPFS
+};
+/*
+ * Vnode attributes.  A field value of VNOVAL represents a field whose value
+ * is unavailable (getattr) or which is not to be changed (setattr).
+ *
+ * Some vattr fields may be wider then what is reported to userland.
+ */
+struct vattr {
+	enum vtype	va_type;	/* vnode type (for create) */
+	u_int64_t	va_nlink;	/* number of references to file */
+	u_short		va_mode;	/* files access mode and type */
+	uid_t		va_uid;		/* owner user id */
+	gid_t		va_gid;		/* owner group id */
+	udev_t		va_fsid;	/* file system id */
+	ino_t		va_fileid;	/* file id */
+	u_quad_t	va_size;	/* file size in bytes */
+	long		va_blocksize;	/* blocksize preferred for i/o */
+	struct timespec	va_atime;	/* time of last access */
+	struct timespec	va_mtime;	/* time of last modification */
+	struct timespec	va_ctime;	/* time file changed */
+	u_int64_t	va_gen;		/* generation number of file */
+	u_long		va_flags;	/* flags defined for file */
+	int		va_rmajor;	/* device the special file represents */
+	int		va_rminor;
+	u_quad_t	va_bytes;	/* bytes of disk space held by file */
+	u_quad_t	va_filerev;	/* file modification number */
+	u_int		va_vaflags;	/* operations flags, see below */
+	long		va_spare;	/* remain quad aligned */
+	int64_t		va_unused01;
+	uuid_t		va_uid_uuid;	/* native uuids if available */
+	uuid_t		va_gid_uuid;
+	uuid_t		va_fsid_uuid;
+};
 
 // from sys/vfsops.h
 #define VOP_OPEN(vp, mode, cred, fp)                    \
         vop_open(*(vp)->v_ops, vp, mode, cred, fp)
 #define VOP_CLOSE(vp, fflag)                            \
         vop_close(*(vp)->v_ops, vp, fflag)
-#define VOP_FSYNC(vp, waitfor)                          \
+#define VOP_FSYNC(vp, waitfor, td)                          \
         vop_fsync(*(vp)->v_ops, vp, waitfor)
+#define VOP_SETATTR(vp, vap, cred)                      \
+        vop_setattr(*(vp)->v_ops, vp, vap, cred)
+
 
 struct vop_inactive_args {};
 struct vop_reclaim_args {};
@@ -192,6 +332,7 @@ struct ucred;
 
 int vop_open(struct vop_ops *ops, struct vnode *vp, int mode,
              struct ucred *cred, struct file *file);
+int vop_setattr(struct vop_ops *ops, struct vnode *vp, struct vattr *vap, struct ucred *cred);
 int vop_close(struct vop_ops *ops, struct vnode *vp, int fflag);
 int vop_fsync(struct vop_ops *ops, struct vnode *vp, int waitfor);
 
@@ -234,6 +375,8 @@ struct vnode {
             struct cdev *vu_cdevinfo; /* device (VCHR, VBLK) */
         } vu_cdev;
     } v_un;
+    struct  lwkt_token v_token;             /* (see above) */
+
 
     struct super_block *sb; // defined by us, we use this for sb_bread()
 };
@@ -276,6 +419,10 @@ typedef __builtin_va_list   __va_list;  /* internally known to gcc */
         __builtin_va_end(ap)
 
 // from sys/systm.h
+void vput(struct vnode *vp);
+struct buf *
+findblk(struct vnode *vp, off_t loffset, int flags);
+extern int bootverbose;         /* nonzero to print verbose messages */
 #define KKASSERT(exp) BUG_ON(!(exp))
 #define KASSERT(exp,msg) BUG_ON(!(exp))
 #define kprintf printk
@@ -293,6 +440,10 @@ int copyout (const void *kaddr, void *udaddr, size_t len);
 u_quad_t strtouq (const char *, char **, int);
 int kvprintf (const char *, __va_list);
 
+//static inline void _tsleep_interlock(int gd, const volatile void *ident, int flags);
+void tsleep_interlock (const volatile void *, int);
+
+void waitrunningbufspace(void);
 // from kern/vfs_subr.c
 #define KERN_MAXVNODES           5      /* int: max vnodes */
 
@@ -309,6 +460,7 @@ extern int desiredvnodes;
 // from sys/lock.h
 #define LK_EXCLUSIVE    0x00000002      /* exclusive lock */
 #define LK_RETRY        0x00020000 /* vn_lock: retry until locked */
+#define LK_NOWAIT    0x00000010      /* do not sleep to await lock */
 
 // from sys/libkern.h
 #define bcmp(cs, ct, count) memcmp(cs, ct, count)
@@ -325,6 +477,12 @@ extern int      hidirtybufspace;
 
 // from sys/kernel.h
 extern int hz;                          /* system clock's frequency */
+void lwkt_gettoken(lwkt_token_t tok);
+void lwkt_reltoken(lwkt_token_t tok);
+
+//void            atomic_add_long(volatile unsigned long *, long);
+void atomic_add_long(int v, long i);
+#define PINTERLOCKED    0x00000400      /* Interlocked tsleep */
 
 // from sys/iosched.h
 void bwillwrite(int bytes);
