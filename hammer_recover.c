@@ -130,14 +130,6 @@
 static int hammer_skip_redo = 0;
 /* TUNABLE_INT("vfs.hammer.skip_redo", &hammer_skip_redo); */
 
-void vput(struct vnode *vp);
-
-void
-vput(struct vnode *vp)
-{
-	vn_unlock(vp);
-	vrele(vp);
-}
 
 # define        UIO_READ        1
 # define        UIO_WRITE       2

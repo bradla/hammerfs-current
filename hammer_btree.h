@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2007 The DragonFly Project.  All rights reserved.
- *
+ * 
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- *
+ * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- *
+ * 
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,7 +30,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
+ * 
  * $DragonFly: src/sys/vfs/hammer/hammer_btree.h,v 1.24 2008/06/26 04:06:22 dillon Exp $
  */
 
@@ -192,7 +192,7 @@ typedef union hammer_btree_elm *hammer_btree_elm_t;
  * are (256-1), (128-1), (64-1), (32-1), or (16-1).
  *
  * NOTE: The node head for an internal does not contain the subtype
- * (The B-Tree node type for the nodes referenced by its elements).
+ * (The B-Tree node type for the nodes referenced by its elements). 
  * Instead, each element specifies the subtype (elm->base.subtype).
  * This allows us to maintain an unbalanced B-Tree and to easily identify
  * special inter-cluster link elements.
@@ -249,3 +249,4 @@ struct hammer_node_ondisk {
 	(sizeof(struct hammer_node_ondisk) - sizeof(hammer_crc_t))
 
 typedef struct hammer_node_ondisk *hammer_node_ondisk_t;
+

@@ -1,0 +1,12 @@
+SRCS=	crc32.c info.c misc.c
+INCS=	libhammer.h
+MAN=	 libhammer_get_volinfo.3
+CC = gcc
+CFLAGS = -Wall -fPIC
+utilObjs = crc32.o info.o misc.o
+
+libhammer.a: $(utilObjs)
+	ar rc $@ $(utilObjs)
+	ranlib $@
+all: 
+	gcc -shared -Wl,-soname,libhammer.so -o libhammer.so   *.o

@@ -32,13 +32,8 @@
  * SUCH DAMAGE.
  */
 
-#include "dfly_wrap.h"
 #include "hammer.h"
 #include "dfly/vm/vm_extern.h"
-#include "dfly/sys/buf.h"
-#include "dfly/sys/buf2.h"
-
-int hammer_limit_reclaim;
 
 static int	hammer_unload_inode(struct hammer_inode *ip);
 static void	hammer_free_inode(hammer_inode_t ip);
@@ -181,15 +176,14 @@ RB_GENERATE2(hammer_pfs_rb_tree, hammer_pseudofs_inmem, rb_node,
 int
 hammer_vop_inactive(struct vop_inactive_args *ap)
 {
-#if 0
-	struct hammer_inode *ip; /* = VTOI(ap->a_vp); */
+	struct hammer_inode *ip=NULL; /* = VTOI(ap->a_vp); XXX */
 	hammer_mount_t hmp;
 
 	/*
 	 * Degenerate case
 	 */
 	if (ip == NULL) {
-		/* XXX fix vrecycle(ap->a_vp); */
+		/* XXX vrecycle(ap->a_vp); */
 		return(0);
 	}
 
@@ -214,8 +208,6 @@ hammer_vop_inactive(struct vop_inactive_args *ap)
 		lwkt_reltoken(&hmp->fs_token);
 		/* XXX vrecycle(ap->a_vp); */
 	}
-#endif
-	printk(KERN_INFO "hammer_vop_inactive\n");
 	return(0);
 }
 
@@ -231,12 +223,11 @@ hammer_vop_inactive(struct vop_inactive_args *ap)
 int
 hammer_vop_reclaim(struct vop_reclaim_args *ap)
 {
-#if 0
 	struct hammer_inode *ip;
 	hammer_mount_t hmp;
 	struct vnode *vp;
 
-	/* vp = ap->a_vp; */
+	vp = ap->a_vp;
 
 	if ((ip = vp->v_data) != NULL) {
 		hmp = ip->hmp;
@@ -254,8 +245,6 @@ hammer_vop_reclaim(struct vop_reclaim_args *ap)
 		hammer_rel_inode(ip, 1);
 		lwkt_reltoken(&hmp->fs_token);
 	}
-#endif
-	printk(KERN_INFO "vop_reclaim\n");
 	return(0);
 }
 
@@ -278,7 +267,7 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 
 	for (;;) {
 		if ((vp = ip->vp) == NULL) {
-			/* XXX error = getnewvnode(VT_HAMMER, hmp->mp, vpp, 0, 0); */
+			error = getnewvnode(VT_HAMMER, hmp->mp, vpp, 0, 0);
 			if (error)
 				break;
 			hammer_lock_ex(&ip->lock);
@@ -286,7 +275,7 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 				hammer_unlock(&ip->lock);
 				vp = *vpp;
 				vp->v_type = VBAD;
-				/* XX vx_put(vp); */
+				vx_put(vp);
 				continue;
 			}
 			hammer_ref(&ip->lock);
@@ -301,12 +290,12 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 			switch(ip->ino_data.obj_type) {
 			case HAMMER_OBJTYPE_CDEV:
 			case HAMMER_OBJTYPE_BDEV:
-				/* vp->v_ops = &hmp->mp->mnt_vn_spec_ops;
+				vp->v_ops = &hmp->mp->mnt_vn_spec_ops;
 				addaliasu(vp, ip->ino_data.rmajor,
-					  ip->ino_data.rminor); XXX */
+					  ip->ino_data.rminor);
 				break;
 			case HAMMER_OBJTYPE_FIFO:
-				/* vp->v_ops = &hmp->mp->mnt_vn_fifo_ops; */
+				vp->v_ops = &hmp->mp->mnt_vn_fifo_ops;
 				break;
 			case HAMMER_OBJTYPE_REGFILE:
 				break;
@@ -326,10 +315,10 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 			 */
 			if (ip->obj_id == HAMMER_OBJID_ROOT &&
 			    ip->obj_asof == hmp->asof) {
-				/* XXX if (ip->obj_localization == 0)
-					 vsetflags(vp, VROOT);
+				if (ip->obj_localization == 0)
+					vsetflags(vp, VROOT);
 				else
-					 vsetflags(vp, VPFSROOT); */
+					vsetflags(vp, VPFSROOT);
 			}
 
 			vp->v_data = (void *)ip;
@@ -337,9 +326,9 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 			/* make related vnode dirty if inode dirty? */
 			hammer_unlock(&ip->lock);
 			if (vp->v_type == VREG) {
-				/* vinitvmio(vp, ip->ino_data.size,
+				vinitvmio(vp, ip->ino_data.size,
 					  hammer_blocksize(ip->ino_data.size),
-					  hammer_blockoff(ip->ino_data.size)); */
+					  hammer_blockoff(ip->ino_data.size));
 			}
 			break;
 		}
@@ -355,21 +344,21 @@ hammer_get_vnode(struct hammer_inode *ip, struct vnode **vpp)
 			hammer_unlock(&ip->lock);
 			continue;
 		}
-		/* XXX vhold_interlocked(vp); */
+		vhold_interlocked(vp);
 		hammer_unlock(&ip->lock);
 
 		/*
 		 * loop if the vget fails (aka races), or if the vp
 		 * no longer matches ip->vp.
 		 */
-		/* if (vget(vp, LK_EXCLUSIVE) == 0) {
+		if (vget(vp, LK_EXCLUSIVE) == 0) {
 			if (vp == ip->vp) {
 				vdrop(vp);
 				break;
 			}
 			vput(vp);
 		}
-		vdrop(vp); */
+		vdrop(vp);
 	}
 	*vpp = vp;
 	return(error);
@@ -445,8 +434,8 @@ loop:
 
 	/*
 	 * Allocate a new inode structure and deal with races later.
-	 */ /* struct hammer_inode */
-	ip = kzalloc(sizeof(*ip), hmp->m_inodes, GFP_KERNEL);
+	 */
+	ip = kzalloc(sizeof(*ip), GFP_KERNEL);
 	++hammer_count_inodes;
 	++hmp->count_inodes;
 	ip->obj_id = obj_id;
@@ -979,7 +968,7 @@ retry:
 		ip = NULL;
 	}
 
-	pfsm = kzalloc(sizeof(*pfsm), hmp->m_misc, GFP_KERNEL);
+	pfsm = kzalloc(sizeof(*pfsm), GFP_KERNEL);
 	pfsm->localization = localization;
 	pfsm->pfsd.unique_uuid = trans->rootvol->ondisk->vol_fsid;
 	pfsm->pfsd.shared_uuid = pfsm->pfsd.unique_uuid;
@@ -1112,7 +1101,7 @@ hammer_mkroot_pseudofs(hammer_transaction_t trans, struct ucred *cred,
 	ip = hammer_get_inode(trans, NULL, HAMMER_OBJID_ROOT, HAMMER_MAX_TID,
 			      pfsm->localization, 0, &error);
 	if (ip == NULL) {
-		/*
+		/* XXX
 		vattr_null(&vap);
 		vap.va_mode = 0755;
 		vap.va_type = VDIR;
@@ -1844,10 +1833,11 @@ hammer_setup_parent_inodes(hammer_inode_t ip, int depth,
 	 * not be anything to wakeup (ip).
 	 */
 	if (depth == 20 && TAILQ_FIRST(&ip->target_list)) {
-		kprintf(&hammer_gen_krate,
+		/* kprintf(&hammer_gen_krate,
 			    "HAMMER Warning: depth limit reached on "
 			    "setup recursion, inode %p %016llx\n",
-			    ip, (long long)ip->obj_id);
+			     ip, (long long)ip->obj_id);
+		XXX */
 		return(-2);
 	}
 
@@ -2445,8 +2435,8 @@ hammer_wait_inode(hammer_inode_t ip)
 			if (ip->flush_group->closed == 0) {
 				if (hammer_debug_inode) {
 					kprintf("hammer: debug: forcing "
-						"async flush ip %016jx\n",
-						(intmax_t)ip->obj_id);
+						"async flush ip %016llx\n",
+						(signed long long int)ip->obj_id);
 				}
 				hammer_flusher_async(ip->hmp,
 						     ip->flush_group);
@@ -3288,6 +3278,7 @@ hammer_inode_waitreclaims(hammer_transaction_t trans)
 {
 	hammer_mount_t hmp = trans->hmp;
 	struct hammer_reclaim reclaim;
+	pid_t p_pid=0; /* XXX */
 	int lower_limit;
 
 	/*
@@ -3297,15 +3288,15 @@ hammer_inode_waitreclaims(hammer_transaction_t trans)
 	if (curthread->td_proc) {
 		struct hammer_inostats *stats;
 
-		stats = hammer_inode_inostats(hmp, curthread->td_proc->p_pid);
+		stats = hammer_inode_inostats(hmp, p_pid /* curthread->td_proc->p_pid */);
 		++stats->count;
 
 		if (stats->count > hammer_limit_reclaims / 2)
 			stats->count = hammer_limit_reclaims / 2;
 		lower_limit = hammer_limit_reclaims - stats->count;
 		if (hammer_debug_general & 0x10000) {
-			kprintf("pid %5d limit %d\n",
-				(int)curthread->td_proc->p_pid, lower_limit);
+		/*	kprintf("pid %5d limit %d\n",
+				(int)curthread->td_proc->p_pid, lower_limit); XXX */
 		}
 	} else {
 		lower_limit = hammer_limit_reclaims * 3 / 4;
@@ -3337,6 +3328,7 @@ hammer_inode_inostats(hammer_mount_t hmp, pid_t pid)
 	int delta;
 	int chain;
 	static volatile int iterator;	/* we don't care about MP races */
+	int ticks=0;
 
 	/*
 	 * Chain up to 4 times to find our entry.

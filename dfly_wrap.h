@@ -19,10 +19,12 @@
 #include <linux/slab.h>   // for kmalloc
 #include <linux/string.h> // for memcmp, memcpy, memset
 #include <linux/buffer_head.h> // for brelse
+#include "dfly/sys/queue.h"
 
 #ifndef _SYS_UUID_H_
 #include "dfly/sys/uuid.h"
 #endif
+
 
 /*
  * required DragonFly BSD definitions
@@ -156,6 +158,7 @@ struct thread {
     struct lwp  *td_lwp;        /* (optional) associated lwp */
     lwkt_tokref_t td_toks_stop;		/* tokens we want */
     struct lwkt_tokref td_toks_array[LWKT_MAXTOKENS];
+	struct proc	*td_proc;	/* (optional) associated process */
 };
 typedef struct thread *thread_t;
 
@@ -201,22 +204,23 @@ struct statvfs {
 #define FINDBLK_TEST      0x0010  /* test only, do not lock */
 #define FINDBLK_NBLOCK  0x0020  /* use non-blocking lock, can return NULL */
 #define FINDBLK_REF	0x0040	/* ref the buf to prevent reuse */
+
 #define NBUF_BIO	6
 
 struct buf {
-off_t	b_offset;		/* Offset into file */
-					/* Function to call upon completion. */
-long	b_resid;		/* Remaining I/O. */
-long	b_bufsize;		/* Allocated buffer size. */
-int	b_error;		/* Errno value. */
-long	b_flags;		/* B_* flags. */
-unsigned long    b_bcount;
+	off_t	b_offset;		/* Offset into file */
+						/* Function to call upon completion. */
+	long	b_resid;		/* Remaining I/O. */
+	long	b_bufsize;		/* Allocated buffer size. */
+	int	b_error;		/* Errno value. */
+	long	b_flags;		/* B_* flags. */
+	unsigned long    b_bcount;
     caddr_t b_data;                 /* Memory, superblocks, indirect etc. */
 	atomic_t	b_refs;			/* FINDBLK_REF/bqhold()/bqdrop() */
 	struct vnode *b_vp;		/* (vp, loffset) index */
 	struct bio b_bio_array[NBUF_BIO]; /* BIO translation layers */ 
+	struct	vnode *b_dep;		/* List of filesystem dependencies. */
 };
-
 /*
  * XXX temporary
  */
@@ -225,7 +229,10 @@ unsigned long    b_bcount;
 //#define b_loffset	b_bio1.bi_io_vec.bv_offset
 
 struct vnode;
-int bread (struct super_block*, off_t, int, struct buf **);
+// struct super_block *sb
+int bread (struct vnode *devvp, off_t, int, struct buf **);
+int bwrite(struct buf *bp);
+
 #ifndef _LINUX_BUFFER_HEAD_H
 void brelse (struct buf *);
 #endif
@@ -249,6 +256,8 @@ struct mount {
     int mnt_flag;               /* flags shared with user */
     struct statfs   mnt_stat;               /* cache of Filesystem stats */
     struct statvfs  mnt_vstat;              /* extended stats */
+	struct vop_ops  *mnt_vn_spec_ops;       /* for use by the VFS */
+ 	struct vop_ops  *mnt_vn_fifo_ops;       /* for use by the VFS */
 };
 
 int vfs_mountedon (struct vnode *);    /* is a vfs mounted on vp */
@@ -326,7 +335,12 @@ struct vattr {
 
 
 struct vop_inactive_args {};
-struct vop_reclaim_args {};
+//struct vop_reclaim_args {};
+struct vop_reclaim_args {
+	//struct vop_generic_args a_head;
+    struct vnode *a_vp;
+};
+
 struct vop_ops {};
 struct ucred;
 
@@ -428,13 +442,24 @@ extern int bootverbose;         /* nonzero to print verbose messages */
 #define kprintf printk
 #define ksnprintf snprintf
 #define strtoul simple_strtoul
-#define bcopy memcpy
+//#define bcopy memcpy
 #define bzero(buf, len) memset(buf, 0, len)
+
+void bcopy(const void *src, void *dst, size_t len);
+void vfs_bio_clrbuf(struct buf *bp);
+void buf_act_advance(struct buf *bp);
+void bqrelse(struct buf *bp);
+void bremfree(struct buf *bp);
+void bdwrite(struct buf *bp);
+int cluster_awrite(struct buf *bp);
+void vn_strategy(struct vnode *vp, struct bio *bio);
+void breadcb(struct vnode *vp, off_t loffset, int size,	void (*func)(struct bio *), void *arg);
+void vclean_unlocked(struct vnode *vp);
 void Debugger (const char *msg);
 uint32_t crc32(const void *buf, size_t size);
 uint32_t crc32_ext(const void *buf, size_t size, uint32_t ocrc);
-int tsleep (void *, int, const char *, int);
-void wakeup (void *chan);
+int tsleep(const volatile void *ident, int flags, const char *wmesg, int timo);
+void wakeup(const volatile void *ident); //(void *ident);
 int copyin (const void *udaddr, void *kaddr, size_t len);
 int copyout (const void *kaddr, void *udaddr, size_t len);
 u_quad_t strtouq (const char *, char **, int);
@@ -443,7 +468,14 @@ int kvprintf (const char *, __va_list);
 //static inline void _tsleep_interlock(int gd, const volatile void *ident, int flags);
 void tsleep_interlock (const volatile void *, int);
 
+int atomic_cmpset_int(volatile u_int *dst, u_int exp, u_int src);
+void biodone(struct bio *bio);
+struct bio *push_bio(struct bio *bio);
+struct bio *pop_bio(struct bio *bio);
 void waitrunningbufspace(void);
+void regetblk(struct buf *bp);
+struct buf *geteblk(int size);
+struct buf *getblk (struct vnode *vp, off_t, int, int, int);
 // from kern/vfs_subr.c
 #define KERN_MAXVNODES           5      /* int: max vnodes */
 
@@ -468,6 +500,40 @@ extern int desiredvnodes;
 // from cpu/i386/include/param.h
 #define MAXPHYS         (128 * 1024)    /* max raw I/O transfer size */
 
+// inode
+#define VA_UID_UUID_VALID        0x0004  /* uuid fields also populated */
+#define     VNOVAL  (-1)
+#define VA_GID_UUID_VALID        0x0008  /* uuid fields also populated */
+//typedef signed long long int intmax_t;
+int vm_page_count_severe(void);
+int vget(struct vnode *vp, int flags);
+void vdrop(struct vnode *vp);
+int	nvtruncbuf (struct vnode *vp, off_t length, int blksize, int boff,int trivial);
+int getnewvnode(enum vtagtype tag, struct mount *mp,struct vnode **vpp, int lktimeout, int lkflags);
+void vx_put(struct vnode *vp);
+void addaliasu(struct vnode *nvp, int x, int y);
+void vsetflags(struct vnode *vp, int flags);
+#define     VROOT   0x01    /* root of its file system */
+#define VPFSROOT        0x00000100      /* may be a pseudo filesystem root */
+int vinitvmio(struct vnode *vp, off_t filesize, int blksize, int boff);
+void vhold_interlocked(struct vnode *vp);
+#define  UF_NODUMP       0x00000001      /* do not dump file */
+// inode.c
+
+uid_t vop_helper_create_uid(struct mount *mp, mode_t dmode, uid_t duid, struct ucred *cred, unsigned short *modep);
+
+// blockmap.c
+
+void cpu_ccfence(void);
+int vm_page_count_min(int donotcount);
+
+// ioctl.c
+#define PRIV_HAMMER_IOCTL        650     /* can hammer_ioctl(). */
+#define PRIV_HAMMER_VOLUME       651     /* HAMMER volume management */
+
+// signal.c
+void lwkt_user_yield(void);
+
 // from sys/signal2.h
 #define CURSIG(lp)              __cursig(lp, 1, 0)
 int __cursig(struct lwp *, int, int);
@@ -476,12 +542,19 @@ int __cursig(struct lwp *, int, int);
 extern int      hidirtybufspace;
 
 // from sys/kernel.h
+extern const char *panicstr;        /* panic message */
 extern int hz;                          /* system clock's frequency */
 void lwkt_gettoken(lwkt_token_t tok);
 void lwkt_reltoken(lwkt_token_t tok);
 
+int
+count_dev( unsigned long long  dev);
+int
+vcount(struct vnode *vp);
+
+void BUF_KERNPROC(struct buf *bp);
 //void            atomic_add_long(volatile unsigned long *, long);
-void atomic_add_long(int v, long i);
+void atomic_add_long(long int *v, long i);
 #define PINTERLOCKED    0x00000400      /* Interlocked tsleep */
 
 // from sys/iosched.h

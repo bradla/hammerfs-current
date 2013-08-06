@@ -146,7 +146,7 @@ hammer_btree_iterate(hammer_cursor_t cursor)
 	 */
 	if (++hmp->check_yield > hammer_yield_check) {
 		hmp->check_yield = 0;
-		/* lwkt_user_yield(); */
+		lwkt_user_yield();
 	}
 
 
@@ -463,7 +463,7 @@ hammer_btree_iterate_reverse(hammer_cursor_t cursor)
 	hmp = cursor->trans->hmp;
 	if (++hmp->check_yield > hammer_yield_check) {
 		hmp->check_yield = 0;
-		/* lwkt_user_yield(); */
+		lwkt_user_yield();
 	}
 
 	/*

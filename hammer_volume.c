@@ -45,10 +45,6 @@
 #include "dfly/sys/buf.h"
 #include "dfly/sys/buf2.h"
 
-/*#include <sys/fcntl.h>
-#include <sys/nlookup.h>
-#include <sys/buf.h> */
-
 static int
 hammer_setup_device(struct vnode **devvpp, const char *dev_path, int ronly);
 
@@ -85,10 +81,10 @@ hammer_ioc_volume_add(hammer_transaction_t trans, hammer_inode_t ip,
 	struct mount *mp = hmp->mp;
 	hammer_volume_t volume;
 	int error;
-	int free_vol_no = 0;
+        int free_vol_no = 0;
 	struct vnode *devvp = NULL;
-	int vol_no;
-        struct bigblock_stat stat;
+	int vol_no = 0;
+	struct bigblock_stat stat;
 
 	if (mp->mnt_flag & MNT_RDONLY) {
 		kprintf("Cannot add volume to read-only HAMMER filesystem\n");
@@ -108,7 +104,6 @@ hammer_ioc_volume_add(hammer_transaction_t trans, hammer_inode_t ip,
 	/*
 	 * Find an unused volume number.
 	 */
-	
 	while (free_vol_no < HAMMER_MAX_VOLUMES &&
 	       RB_LOOKUP(hammer_vol_rb_tree, &hmp->rb_vols_root, free_vol_no)) {
 		++free_vol_no;
@@ -181,7 +176,7 @@ hammer_ioc_volume_add(hammer_transaction_t trans, hammer_inode_t ip,
 	volume = hammer_get_volume(hmp, free_vol_no, &error);
 	KKASSERT(volume != NULL && error == 0);
 
-	
+
 	error =	hammer_format_freemap(trans, volume, &stat);
 	KKASSERT(error == 0);
 
@@ -230,11 +225,11 @@ hammer_ioc_volume_del(hammer_transaction_t trans, hammer_inode_t ip,
 	hammer_volume_t volume;
 	int error = 0;
 	int vol_no;
+	struct hammer_ioc_reblock reblock;
 	int count = 0;
-        struct hammer_ioc_reblock reblock;
-        struct bigblock_stat stat;
-        struct vnode *devvp = NULL;
-        
+	struct bigblock_stat stat;
+	struct vnode *devvp = NULL;
+
 	if (mp->mnt_flag & MNT_RDONLY) {
 		kprintf("Cannot del volume from read-only HAMMER filesystem\n");
 		return (EINVAL);
@@ -285,7 +280,8 @@ hammer_ioc_volume_del(hammer_transaction_t trans, hammer_inode_t ip,
 	 */
 
 	hmp->volume_to_remove = volume->vol_no;
-	
+
+
 	bzero(&reblock, sizeof(reblock));
 
 	reblock.key_beg.localization = HAMMER_MIN_LOCALIZATION;
@@ -315,7 +311,7 @@ hammer_ioc_volume_del(hammer_transaction_t trans, hammer_inode_t ip,
 	/*
 	 * Sync filesystem
 	 */
-	
+
 	while (hammer_flusher_haswork(hmp)) {
 		hammer_flusher_sync(hmp);
 		++count;
@@ -339,7 +335,7 @@ hammer_ioc_volume_del(hammer_transaction_t trans, hammer_inode_t ip,
 	/*
 	 * We use stat later to update rootvol's bigblock stats
 	 */
-	
+
 	error = hammer_free_freemap(trans, volume, &stat);
 	if (error) {
 		kprintf("Failed to free volume. Volume not empty!\n");
@@ -433,7 +429,7 @@ hammer_ioc_volume_del(hammer_transaction_t trans, hammer_inode_t ip,
 	 *
 	 * This is to not accidentally mount the volume again.
 	 */
-	
+
 	error = hammer_setup_device(&devvp, ioc->device_name, 0);
 	if (error) {
 		kprintf("Failed to open device: %s\n", ioc->device_name);
@@ -454,6 +450,40 @@ end:
 	return (error);
 }
 
+
+int
+hammer_ioc_volume_list(hammer_transaction_t trans, hammer_inode_t ip,
+    struct hammer_ioc_volume_list *ioc)
+{
+	struct hammer_mount *hmp = trans->hmp;
+	hammer_volume_t volume;
+	int error = 0;
+	int i, cnt, len;
+
+	for (i = 0, cnt = 0; i < HAMMER_MAX_VOLUMES && cnt < ioc->nvols; i++) {
+		volume = hammer_get_volume(hmp, i, &error);
+		if (volume == NULL && error == ENOENT) {
+			error = 0;
+			continue;
+		}
+		KKASSERT(volume != NULL && error == 0);
+
+		len = strlen(volume->vol_name) + 1;
+		KKASSERT(len <= PATH_MAX);
+
+		error = copyout(volume->vol_name, ioc->vols[cnt].device_name,
+				len);
+		if (error) {
+			hammer_rel_volume(volume, 0);
+			return (error);
+		}
+		cnt++;
+		hammer_rel_volume(volume, 0);
+	}
+	ioc->nvols = cnt;
+
+	return (error);
+}
 
 /*
  * Iterate over all usable L1 entries of the volume and
@@ -558,7 +588,7 @@ format_callback(hammer_transaction_t trans, hammer_volume_t volume,
 		KKASSERT(layer1->phys_offset == HAMMER_BLOCKMAP_UNAVAIL);
 
 		hammer_modify_buffer(trans, *bufferp, layer1, sizeof(*layer1));
-		bzero(layer1, sizeof(layer1));
+		bzero(layer1, sizeof(*layer1));
 		layer1->phys_offset = phys_off;
 		layer1->blocks_free = stat->counter;
 		layer1->layer1_crc = crc32(layer1, HAMMER_LAYER1_CRCSIZE);
@@ -650,7 +680,7 @@ free_callback(hammer_transaction_t trans, hammer_volume_t volume __unused,
 		 * Free the L1 entry
 		 */
 		hammer_modify_buffer(trans, *bufferp, layer1, sizeof(*layer1));
-		bzero(layer1, sizeof(layer1));
+		bzero(layer1, sizeof(*layer1));
 		layer1->phys_offset = HAMMER_BLOCKMAP_UNAVAIL;
 		layer1->layer1_crc = crc32(layer1, HAMMER_LAYER1_CRCSIZE);
 		hammer_modify_buffer_done(*bufferp);
@@ -736,7 +766,7 @@ hammer_setup_device(struct vnode **devvpp, const char *dev_path, int ronly)
 			error = vfs_mountedon(*devvpp);
 		}
 	}
-	if (error == 0 && count_udev((long)*devvpp,0) > 0)
+	if (error == 0 && vcount(*devvpp) > 0)
 		error = EBUSY;
 	if (error == 0) {
 		vn_lock(*devvpp, LK_EXCLUSIVE | LK_RETRY);
@@ -758,9 +788,9 @@ hammer_setup_device(struct vnode **devvpp, const char *dev_path, int ronly)
 static void
 hammer_close_device(struct vnode **devvpp, int ronly)
 {
-	VOP_CLOSE(*devvpp, (ronly ? FREAD : FREAD|FWRITE));
 	if (*devvpp) {
 		vinvalbuf(*devvpp, ronly ? 0 : V_SAVE, 0, 0);
+		VOP_CLOSE(*devvpp, (ronly ? FREAD : FREAD|FWRITE));
 		vrele(*devvpp);
 		*devvpp = NULL;
 	}
@@ -771,17 +801,17 @@ hammer_format_volume_header(struct hammer_mount *hmp, struct vnode *devvp,
 	const char *vol_name, int vol_no, int vol_count,
 	int64_t vol_size, int64_t boot_area_size, int64_t mem_area_size)
 {
-	struct buf *bp = (void *)hmp;
+	struct buf *bp; /* buf *bp */
 	struct hammer_volume_ondisk *ondisk;
 	int error;
-	unsigned int vol_alloc = HAMMER_BUFSIZE * 16;
+	int64_t vol_alloc = HAMMER_BUFSIZE * 16;
 
 	/*
 	 * Extract the volume number from the volume header and do various
 	 * sanity checks.
 	 */
 	KKASSERT(HAMMER_BUFSIZE >= sizeof(struct hammer_volume_ondisk));
-	error = bread((struct super_block *)devvp, 0LL, HAMMER_BUFSIZE, &bp);
+	error = bread(devvp, 0LL, HAMMER_BUFSIZE, &bp);
 	if (error || bp->b_bcount < sizeof(struct hammer_volume_ondisk))
 		goto late_failure;
 
@@ -814,7 +844,6 @@ hammer_format_volume_header(struct hammer_mount *hmp, struct vnode *devvp,
 	 * bigblock allocator.
 	 */
 	
-
 	ondisk->vol_bot_beg = vol_alloc;
 	vol_alloc += boot_area_size;
 	ondisk->vol_mem_beg = vol_alloc;
@@ -841,13 +870,12 @@ hammer_format_volume_header(struct hammer_mount *hmp, struct vnode *devvp,
 	/*
 	 * Write volume header to disk
 	 */
-	/* XXXXXX FIx me error = bwrite(bp); */
+	error = bwrite(bp);
 	bp = NULL;
 
 late_failure:
-/* XX
 	if (bp)
-		brelse(bp); */
+		dfly_brelse(bp);
 	return (error);
 }
 
@@ -862,19 +890,18 @@ hammer_clear_volume_header(struct vnode *devvp)
 	int error;
 
 	KKASSERT(HAMMER_BUFSIZE >= sizeof(struct hammer_volume_ondisk));
-	error = bread((struct super_block *)devvp, 0LL, HAMMER_BUFSIZE, &bp);
+	error = bread(devvp, 0LL, HAMMER_BUFSIZE, &bp);
 	if (error || bp->b_bcount < sizeof(struct hammer_volume_ondisk))
 		goto late_failure;
 
 	ondisk = (struct hammer_volume_ondisk*) bp->b_data;
 	bzero(ondisk, sizeof(struct hammer_volume_ondisk));
 
-	/* XXXX FIX me ... error = bwrite(bp); */
+	error = bwrite(bp);
 	bp = NULL;
 
 late_failure:
-/* XXX
 	if (bp)
-		brelse(bp); */
+		dfly_brelse(bp);
 	return (error);
 }

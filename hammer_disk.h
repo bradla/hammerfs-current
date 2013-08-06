@@ -98,7 +98,6 @@
  */
 #define HAMMER_MAX_VOLUMES	256
 
-
 /*
  * Hammer transction ids are 64 bit unsigned integers and are usually
  * synchronized with the time of day in nanoseconds.
@@ -303,7 +302,7 @@ struct hammer_blockmap_layer2 {
 	u_int8_t	unused01;
 	u_int16_t	unused02;
 	u_int32_t	append_off;	/* allocatable space index */
-	u_int32_t	bytes_free;	/* bytes free within this bigblock */
+	int32_t		bytes_free;	/* bytes free within this bigblock */
 	hammer_crc_t	entry_crc;
 };
 
@@ -351,7 +350,6 @@ typedef struct hammer_blockmap_layer2 *hammer_blockmap_layer2_t;
  * may be reserved.  The size of the undo fifo is usually set a newfs time
  * but can be adjusted if the filesystem is taken offline.
  */
-
 #define HAMMER_UNDO_LAYER2	128	/* max layer2 undo mapping entries */
 
 /*
@@ -376,7 +374,7 @@ typedef struct hammer_blockmap_layer2 *hammer_blockmap_layer2_t;
  * with a single atomic operation.  A larger transactional operation, such
  * as a remove(), may consist of several smaller atomic operations
  * representing raw meta-data operations.
-  *
+ *
  *				HAMMER VERSION 4 CHANGES
  *
  * In HAMMER version 4 the undo structure alignment is reduced from 16384
@@ -410,7 +408,7 @@ typedef struct hammer_blockmap_layer2 *hammer_blockmap_layer2_t;
 #define HAMMER_TAIL_ONDISK_SIZE		8
 #define HAMMER_HEAD_DOALIGN(bytes)	\
 	(((bytes) + HAMMER_HEAD_ALIGN_MASK) & ~HAMMER_HEAD_ALIGN_MASK)
-	
+
 #define HAMMER_UNDO_ALIGN		512
 #define HAMMER_UNDO_ALIGN64		((u_int64_t)512)
 #define HAMMER_UNDO_MASK		(HAMMER_UNDO_ALIGN - 1)
@@ -419,9 +417,8 @@ typedef struct hammer_blockmap_layer2 *hammer_blockmap_layer2_t;
 struct hammer_fifo_head {
 	u_int16_t hdr_signature;
 	u_int16_t hdr_type;
-	u_int32_t hdr_size;	/* aligned size of the whole mess */
+	u_int32_t hdr_size;	/* Aligned size of the whole mess */
 	u_int32_t hdr_seq;	/* Sequence number */
-	u_int32_t reserved01;	/* (0) reserved for future use */
 	hammer_crc_t hdr_crc;	/* XOR crc up to field w/ crc after field */
 };
 
@@ -440,13 +437,9 @@ typedef struct hammer_fifo_tail *hammer_fifo_tail_t;
  * Fifo header types.
  */
 #define HAMMER_HEAD_TYPE_PAD	(0x0040U|HAMMER_HEAD_FLAG_FREE)
-#define HAMMER_HEAD_TYPE_VOL	0x0041U		/* Volume (dummy header) */
-#define HAMMER_HEAD_TYPE_BTREE	0x0042U		/* B-Tree node */
-#define HAMMER_HEAD_TYPE_UNDO	0x0043U		/* random UNDO information */
-#define HAMMER_HEAD_TYPE_DELETE	0x0044U		/* record deletion */
-#define HAMMER_HEAD_TYPE_RECORD	0x0045U		/* Filesystem record */
 #define HAMMER_HEAD_TYPE_DUMMY	0x0041U		/* dummy entry w/seqno */
 #define HAMMER_HEAD_TYPE_42	0x0042U
+#define HAMMER_HEAD_TYPE_UNDO	0x0043U		/* random UNDO information */
 #define HAMMER_HEAD_TYPE_REDO	0x0044U		/* data REDO / fast fsync */
 #define HAMMER_HEAD_TYPE_45	0x0045U
 
@@ -526,8 +519,6 @@ struct hammer_fifo_redo {
 #define HAMMER_REDO_TERM_WRITE	0x00000004
 #define HAMMER_REDO_TERM_TRUNC	0x00000008
 #define HAMMER_REDO_SYNC	0x00000010
-
-/* typedef struct hammer_fifo_undo *hammer_fifo_undo_t; */
 
 union hammer_fifo_any {
 	struct hammer_fifo_head	head;
@@ -654,15 +645,16 @@ typedef struct hammer_volume_ondisk *hammer_volume_ondisk_t;
 	 sizeof(hammer_crc_t))
 
 #define HAMMER_VOL_VERSION_MIN		1	/* minimum supported version */
-#define HAMMER_VOL_VERSION_DEFAULT	1	/* newfs default version */
-#define HAMMER_VOL_VERSION_WIP		2	/* version >= this is WIP */
-#define HAMMER_VOL_VERSION_MAX		2	/* maximum supported version */
+#define HAMMER_VOL_VERSION_DEFAULT	6	/* newfs default version */
+#define HAMMER_VOL_VERSION_WIP		7	/* version >= this is WIP */
+#define HAMMER_VOL_VERSION_MAX		6	/* maximum supported version */
 
 #define HAMMER_VOL_VERSION_ONE		1
 #define HAMMER_VOL_VERSION_TWO		2	/* new dirent layout (2.3+) */
 #define HAMMER_VOL_VERSION_THREE	3	/* new snapshot layout (2.5+) */
 #define HAMMER_VOL_VERSION_FOUR		4	/* new undo/flush (2.5+) */
 #define HAMMER_VOL_VERSION_FIVE		5	/* dedup (2.9+) */
+#define HAMMER_VOL_VERSION_SIX		6	/* DIRHASH_ALG1 */
 
 /*
  * Record types are fairly straightforward.  The B-Tree includes the record
@@ -772,7 +764,7 @@ struct hammer_inode_data {
 #define HAMMER_INODE_CAP_DIRHASH_ALG1	0x01
 #define HAMMER_INODE_CAP_DIRHASH_ALG2	0x02
 #define HAMMER_INODE_CAP_DIRHASH_ALG3	0x03
-#define HAMMER_INODE_CAP_DIR_LOCAL_INO    0x04    /* use inode localization */
+#define HAMMER_INODE_CAP_DIR_LOCAL_INO	0x04	/* use inode localization */
 
 /*
  * A HAMMER directory entry associates a HAMMER filesystem object with a
@@ -854,7 +846,7 @@ struct hammer_pseudofs_data {
 	int32_t		prune_min;	/* do not prune recent history */
 	int32_t		prune_max;	/* do not retain history beyond here */
 	int32_t		reserved[16];
-};
+} __packed;
 
 typedef struct hammer_pseudofs_data *hammer_pseudofs_data_t;
 

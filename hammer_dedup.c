@@ -461,7 +461,7 @@ _vnode_validate(hammer_dedup_cache_t dcp, void *data, int *errorp)
 	hammer_inode_t ip;
 	struct vnode *vp;
 	struct buf *bp;
-	off_t dooffset;
+	/* off_t dooffset; */
 	int result, error;
 
 	result = error = 0;

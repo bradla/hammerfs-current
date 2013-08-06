@@ -67,6 +67,7 @@
 #include "hammer_mount.h"
 #include "hammer_ioctl.h"
 
+
 #if defined(_KERNEL) || defined(_KERNEL_STRUCTURES)
 
 MALLOC_DECLARE(M_HAMMER);
@@ -1145,7 +1146,7 @@ extern int hammer_count_reservations;
 extern long hammer_count_io_running_read;
 extern long hammer_count_io_running_write;
 extern atomic_t hammer_count_io_locked;
-extern long hammer_limit_dirtybufspace;
+extern int64_t hammer_limit_dirtybufspace;
 extern int hammer_limit_recs;
 extern int hammer_limit_inode_recs;
 extern int hammer_limit_reclaims;
@@ -1522,9 +1523,9 @@ int hammer_ioctl(hammer_inode_t ip, u_long com, caddr_t data, int fflag,
 
 void hammer_io_init(hammer_io_t io, hammer_volume_t volume,
 			enum hammer_io_type type);
-int hammer_io_read(struct super_block *sb, struct hammer_io *io, int limit); 
+int hammer_io_read(struct vnode *devvp, struct hammer_io *io, int limit); 
 void hammer_io_advance(struct hammer_io *io);
-int hammer_io_new(struct super_block *sb, struct hammer_io *io); 
+int hammer_io_new(struct vnode *devvp, struct hammer_io *io); 
 int hammer_io_inval(hammer_volume_t volume, hammer_off_t zone2_offset);
 struct buf *hammer_io_release(struct hammer_io *io, int flush);
 void hammer_io_flush(struct hammer_io *io, int reclaim);
@@ -1582,9 +1583,8 @@ int hammer_ioc_volume_add(hammer_transaction_t trans, hammer_inode_t ip,
                         struct hammer_ioc_volume *ioc);
 int hammer_ioc_volume_del(hammer_transaction_t trans, hammer_inode_t ip,
                         struct hammer_ioc_volume *ioc);
-/*
 int hammer_ioc_volume_list(hammer_transaction_t trans, hammer_inode_t ip,
-			struct hammer_ioc_volume_list *ioc); XXX */
+			struct hammer_ioc_volume_list *ioc);
 int hammer_ioc_dedup(hammer_transaction_t trans, hammer_inode_t ip,
 			struct hammer_ioc_dedup *dedup);
 

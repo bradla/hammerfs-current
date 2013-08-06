@@ -388,7 +388,7 @@ struct {								\
 #define RB_PROTOTYPE(name, type, field, cmp)				\
 	_RB_PROTOTYPE(name, type, field, cmp,)
 #define RB_PROTOTYPE_STATIC(name, type, field, cmp)			\
-	_RB_PROTOTYPE(name, type, field, cmp, __unused static)
+	_RB_PROTOTYPE(name, type, field, cmp, static)
 
 #define _RB_PROTOTYPE(name, type, field, cmp, STORQUAL)			\
 STORQUAL struct type *name##_RB_REMOVE(struct name *, struct type *);	\
@@ -433,7 +433,7 @@ struct type *name##_RB_LOOKUP_##ext (struct name *, datatype)		\
 	_RB_GENERATE(name, type, field, cmp,)
 
 #define RB_GENERATE_STATIC(name, type, field, cmp)			\
-	_RB_GENERATE(name, type, field, cmp, __unused static)
+	_RB_GENERATE(name, type, field, cmp, static)
 
 #define _RB_GENERATE(name, type, field, cmp, STORQUAL)			\
 static void								\
@@ -916,7 +916,7 @@ name##_RB_RLOOKUP(struct name *head, datatype value)			\
 #define RB_GENERATE_XLOOKUP(name, ext, type, field, xcmp, datatype)	   \
 	_RB_GENERATE_XLOOKUP(name, ext, type, field, xcmp, datatype,)
 #define RB_GENERATE_XLOOKUP_STATIC(name, ext, type, field, xcmp, datatype) \
-	_RB_GENERATE_XLOOKUP(name, ext, type, field, xcmp, datatype, __unused static)
+	_RB_GENERATE_XLOOKUP(name, ext, type, field, xcmp, datatype, static)
 
 #define _RB_GENERATE_XLOOKUP(name, ext, type, field, xcmp, datatype, STORQUAL)\
 									\

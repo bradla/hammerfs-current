@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2008 The DragonFly Project.  All rights reserved.
- *
+ * 
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- *
+ * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- *
+ * 
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,9 +30,6 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $DragonFly: src/sys/vfs/hammer/hammer_undo.c,v
- * 1.20 2008/07/18 00:19:53 dillon Exp $
  */
 
 /*
@@ -41,12 +38,10 @@
 
 #include "hammer.h"
 
-int64_t hammer_stats_undo;
-
 static int hammer_und_rb_compare(hammer_undo_t node1, hammer_undo_t node2);
 
 RB_GENERATE2(hammer_und_rb_tree, hammer_undo, rb_node,
-			hammer_und_rb_compare, hammer_off_t, offset);
+             hammer_und_rb_compare, hammer_off_t, offset);
 
 /*
  * Convert a zone-3 undo offset into a zone-2 buffer offset.
@@ -62,10 +57,9 @@ hammer_undo_lookup(hammer_mount_t hmp, hammer_off_t zone3_off, int *errorp)
 	KKASSERT((zone3_off & HAMMER_OFF_ZONE_MASK) == HAMMER_ZONE_UNDO);
 	root_volume = hammer_get_root_volume(hmp, errorp);
 	if (*errorp)
-		return 0;
+		return(0);
 	undomap = &hmp->blockmap[HAMMER_ZONE_UNDO_INDEX];
-	KKASSERT(HAMMER_ZONE_DECODE(undomap->alloc_offset) ==
-			HAMMER_ZONE_UNDO_INDEX);
+	KKASSERT(HAMMER_ZONE_DECODE(undomap->alloc_offset) == HAMMER_ZONE_UNDO_INDEX);
 	KKASSERT(zone3_off < undomap->alloc_offset);
 
 	i = (zone3_off & HAMMER_OFF_SHORT_MASK) / HAMMER_LARGEBLOCK_SIZE;
@@ -73,7 +67,7 @@ hammer_undo_lookup(hammer_mount_t hmp, hammer_off_t zone3_off, int *errorp)
 			(zone3_off & HAMMER_LARGEBLOCK_MASK64);
 
 	hammer_rel_volume(root_volume, 0);
-	return result_offset;
+	return(result_offset);
 }
 
 /*
@@ -124,7 +118,7 @@ hammer_generate_undo(hammer_transaction_t trans,
 	 * undo we do not have to generate a new one.
 	 */
 	if (hammer_enter_undo_history(hmp, zone_off, len) == EALREADY)
-		return 0;
+		return(0);
 
 	root_volume = trans->rootvol;
 	undomap = &hmp->blockmap[HAMMER_ZONE_UNDO_INDEX];
@@ -288,7 +282,7 @@ hammer_generate_undo(hammer_transaction_t trans,
 
 	if (buffer)
 		hammer_rel_buffer(buffer, 0);
-	return error;
+	return(error);
 }
 
 /*
@@ -420,7 +414,7 @@ hammer_upgrade_undo_4(hammer_transaction_t trans)
 
 	if (buffer)
 		hammer_rel_buffer(buffer, 0);
-	return error;
+	return (error);
 }
 
 /*
@@ -445,13 +439,13 @@ hammer_enter_undo_history(hammer_mount_t hmp, hammer_off_t offset, int bytes)
 		TAILQ_REMOVE(&hmp->undo_lru_list, node, lru_entry);
 		TAILQ_INSERT_TAIL(&hmp->undo_lru_list, node, lru_entry);
 		if (bytes <= node->bytes)
-			return -1;
+			return(EALREADY);
 		node->bytes = bytes;
-		return 0;
+		return(0);
 	}
-	if (hmp->undo_alloc != HAMMER_MAX_UNDOS)
+	if (hmp->undo_alloc != HAMMER_MAX_UNDOS) {
 		node = &hmp->undos[hmp->undo_alloc++];
-	else {
+	} else {
 		node = TAILQ_FIRST(&hmp->undo_lru_list);
 		TAILQ_REMOVE(&hmp->undo_lru_list, node, lru_entry);
 		RB_REMOVE(hammer_und_rb_tree, &hmp->rb_undo_root, node);
@@ -461,7 +455,7 @@ hammer_enter_undo_history(hammer_mount_t hmp, hammer_off_t offset, int bytes)
 	TAILQ_INSERT_TAIL(&hmp->undo_lru_list, node, lru_entry);
 	onode = RB_INSERT(hammer_und_rb_tree, &hmp->rb_undo_root, node);
 	KKASSERT(onode == NULL);
-	return 0;
+	return(0);
 }
 
 void
@@ -495,11 +489,11 @@ hammer_undo_used(hammer_transaction_t trans)
 		bytes = cundomap->next_offset - dundomap->first_offset;
 	} else {
 		bytes = cundomap->alloc_offset - dundomap->first_offset +
-			(cundomap->next_offset & HAMMER_OFF_LONG_MASK);
+		        (cundomap->next_offset & HAMMER_OFF_LONG_MASK);
 	}
 	max_bytes = cundomap->alloc_offset & HAMMER_OFF_SHORT_MASK;
 	KKASSERT(bytes <= max_bytes);
-	return bytes;
+	return(bytes);
 }
 
 /*
@@ -513,7 +507,7 @@ hammer_undo_space(hammer_transaction_t trans)
 
 	rootmap = &trans->hmp->blockmap[HAMMER_ZONE_UNDO_INDEX];
 	max_bytes = rootmap->alloc_offset & HAMMER_OFF_SHORT_MASK;
-	return max_bytes - hammer_undo_used(trans);
+	return(max_bytes - hammer_undo_used(trans));
 }
 
 int64_t
@@ -525,7 +519,7 @@ hammer_undo_max(hammer_mount_t hmp)
 	rootmap = &hmp->blockmap[HAMMER_ZONE_UNDO_INDEX];
 	max_bytes = rootmap->alloc_offset & HAMMER_OFF_SHORT_MASK;
 
-	return max_bytes;
+	return(max_bytes);
 }
 
 /*
@@ -542,17 +536,17 @@ hammer_undo_reclaim(hammer_io_t io)
 	undomap = &io->hmp->blockmap[HAMMER_ZONE_UNDO_INDEX];
 	next_offset = undomap->next_offset & ~HAMMER_BUFMASK64;
 	if (((struct hammer_buffer *)io)->zoneX_offset == next_offset)
-		return 0;
-	return 1;
+		return(0);
+	return(1);
 }
 
 static int
 hammer_und_rb_compare(hammer_undo_t node1, hammer_undo_t node2)
 {
-	if (node1->offset < node2->offset)
-		return -1;
-	if (node1->offset > node2->offset)
-		return 1;
-	return 0;
+        if (node1->offset < node2->offset)
+                return(-1);
+        if (node1->offset > node2->offset)
+                return(1);
+        return(0);
 }
 

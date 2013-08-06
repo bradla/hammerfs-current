@@ -60,6 +60,7 @@
 #include "dfly/sys/buf.h"
 #include "dfly/sys/buf2.h"
 
+typedef __s32 intptr_t;
 int hammer_limit_running_io;
    
 /*
@@ -88,7 +89,7 @@ static void hammer_indirect_callback(struct bio *bio);
 #if 0
 static void hammer_io_direct_read_complete(struct bio *nbio);
 #endif
-void hammer_io_direct_write_complete(struct bio_vec *nbio);
+void hammer_io_direct_write_complete(struct bio *nbio);
 static int hammer_io_direct_uncache_callback(hammer_inode_t ip, void *data);
 static void hammer_io_set_modlist(struct hammer_io *io);
 static void hammer_io_flush_mark(hammer_volume_t volume);
@@ -149,7 +150,7 @@ hammer_io_init(hammer_io_t io, hammer_volume_t volume, enum hammer_io_type type)
 static void
 hammer_io_disassociate(hammer_io_structure_t iou)
 {
-	struct buf *bp = iou->io.bp;
+	/* struct buf *bp = iou->io.bp; unused see below */
 
 	KKASSERT(iou->io.released);
 	KKASSERT(iou->io.modified == 0);
@@ -160,14 +161,14 @@ hammer_io_disassociate(hammer_io_structure_t iou)
 	/*
 	 * If the buffer was locked someone wanted to get rid of it.
 	 */
-	if (bp->b_flags & B_LOCKED) {
+	/* XX b_flags if (bp->b_flags & B_LOCKED) {
 		atomic_add_int(-1, &hammer_count_io_locked);
 		bp->b_flags &= ~B_LOCKED;
 	}
 	if (iou->io.reclaim) {
 		bp->b_flags |= B_NOCACHE|B_RELBUF;
 		iou->io.reclaim = 0;
-	}
+	} */
 
 	switch(iou->io.type) {
 	case HAMMER_STRUCTURE_VOLUME:
@@ -300,13 +301,14 @@ hammer_io_clear_error_noassert(struct hammer_io *io)
 void
 hammer_io_notmeta(hammer_buffer_t buffer)
 {
+/* XXX b_flags
 	if ((buffer->io.bp->b_flags & B_NOTMETA) == 0) {
 		hammer_mount_t hmp = buffer->io.hmp;
 
 		lwkt_gettoken(&hmp->io_token);
 		buffer->io.bp->b_flags |= B_NOTMETA;
 		lwkt_reltoken(&hmp->io_token);
-	}
+	} */
 }
 
 /*
@@ -325,13 +327,13 @@ hammer_io_notmeta(hammer_buffer_t buffer)
  * No I/O callbacks can occur while we hold the buffer locked.
  */
 int
-hammer_io_read(struct super_block *sb, struct hammer_io *io, int limit)
+hammer_io_read(struct vnode *devvp, struct hammer_io *io, int limit)
 {
 	struct buf *bp;
 	int   error=0;
 
 	if ((bp = io->bp) == NULL) {
-		atomic_add_long( io->bytes, &hammer_count_io_running_read);
+		atomic_add_long( &hammer_count_io_running_read, io->bytes);
 		if (hammer_cluster_enable && limit > io->bytes) {
 			/* error = cluster_read(devvp, io->offset + limit,
 					     io->offset, io->bytes,
@@ -340,7 +342,7 @@ hammer_io_read(struct super_block *sb, struct hammer_io *io, int limit)
 					     &io->bp); */
 			kprintf("cluser_read\n");
 		} else {
-			error = bread(sb, io->offset, io->bytes, &io->bp);
+			error = bread(devvp, io->offset, io->bytes, &io->bp);
 		}
 		hammer_stats_disk_read += io->bytes;
 		atomic_add_long(&hammer_count_io_running_read, -io->bytes);
@@ -350,7 +352,7 @@ hammer_io_read(struct super_block *sb, struct hammer_io *io, int limit)
 		 * even if we error out here.
 		 */
 		bp = io->bp;
-		if ((hammer_debug_io & 0x0001) && (bp->b_flags & B_IODEBUG)) {
+		if ((hammer_debug_io & 0x0001) /* && (bp->b_flags & B_IODEBUG) */) {
 			const char *metatype;
 
 			switch(io->type) {
@@ -388,7 +390,7 @@ hammer_io_read(struct super_block *sb, struct hammer_io *io, int limit)
 				(unsigned long)bp->b_bio2.bio_offset,
 				metatype); */
 		}
-		bp->b_flags &= ~B_IODEBUG;
+		/* bp->b_flags &= ~B_IODEBUG; */
 		/* XXX bp->b_ops = &hammer_bioops;
 		KKASSERT(LIST_FIRST(&bp->b_dep) == NULL); */
 
@@ -419,12 +421,12 @@ hammer_io_read(struct super_block *sb, struct hammer_io *io, int limit)
  * No I/O callbacks can occur while we hold the buffer locked.
  */
 int
-hammer_io_new(struct super_block *sb, struct hammer_io *io)
+hammer_io_new(struct vnode *devvp, struct hammer_io *io)
 {
 	struct buf *bp;
 
 	if ((bp = io->bp) == NULL) {
-		io->bp = getblk(sb, io->offset, io->bytes, 0, 0);
+		io->bp = getblk(devvp, io->offset, io->bytes, 0, 0);
 		bp = io->bp;
 		/* bp->b_ops = &hammer_bioops;
 		KKASSERT(LIST_FIRST(&bp->b_dep) == NULL); */
@@ -495,7 +497,7 @@ hammer_io_inval(hammer_volume_t volume, hammer_off_t zone2_offset)
 		bremfree(bp);
 	else
 		bp = getblk(volume->devvp, phys_offset, HAMMER_BUFSIZE, 0, 0);
-/*
+/* XXX
 	if ((iou = (void *)LIST_FIRST(&bp->b_dep)) != NULL) {
 #if 0
 		hammer_ref(&iou->io.lock);
@@ -508,7 +510,9 @@ hammer_io_inval(hammer_volume_t volume, hammer_off_t zone2_offset)
 		KKASSERT(hammer_isactive(&iou->io.lock) == 1);
 		hammer_rel_buffer(&iou->buffer, 0); */
 		/*hammer_io_deallocate(bp);*/
+/*
 #endif
+
 		dfly_bqrelse(bp);
 		error = EAGAIN;
 	} else {
@@ -518,6 +522,7 @@ hammer_io_inval(hammer_volume_t volume, hammer_off_t zone2_offset)
 		brelse(bp);
 		error = 0;
 	}
+*/
 	lwkt_reltoken(&hmp->io_token);
 	return(error);
 }
@@ -733,7 +738,7 @@ hammer_io_flush(struct hammer_io *io, int reclaim)
 		io->reclaim = 1;
 		if ((bp->b_flags & B_LOCKED) == 0) {
 			bp->b_flags |= B_LOCKED;
-			atomic_add_int(&hammer_count_io_locked, 1);
+			atomic_add_int(1, &hammer_count_io_locked);
 		}
 	}
 
@@ -894,7 +899,7 @@ hammer_modify_volume(hammer_transaction_t trans, hammer_volume_t volume,
 
 	hammer_io_modify(&volume->io, 1);
 	if (len) {
-		rel_offset = (long)base - (long)volume->ondisk;
+		intptr_t rel_offset = (long)base - (long)volume->ondisk;
 		KKASSERT((rel_offset & ~(long)HAMMER_BUFMASK) == 0);
 		 hammer_generate_undo(trans,
 			 HAMMER_ENCODE_RAW_VOLUME(volume->vol_no, rel_offset),
@@ -916,7 +921,7 @@ hammer_modify_buffer(hammer_transaction_t trans, hammer_buffer_t buffer,
 
 	hammer_io_modify(&buffer->io, 1);
 	if (len) {
-		long rel_offset = (long)base - (long)buffer->ondisk;
+		intptr_t rel_offset = (long)base - (long)buffer->ondisk;
 		KKASSERT((rel_offset & ~(long)HAMMER_BUFMASK) == 0);
 		hammer_generate_undo(trans,
 				     buffer->zone2_offset + rel_offset,
@@ -1104,7 +1109,7 @@ static void
 hammer_io_complete(struct buffer_head *bp)
 {
 	// union hammer_io_structure *iou=(void *)bp;
-	union hammer_io_structure *iou = (void *)LIST_FIRST(&bp->b_dep);
+	union hammer_io_structure *iou=NULL; /* = (void *)LIST_FIRST(&bp->b_dep); */
 	struct hammer_mount *hmp = iou->io.hmp;
 	struct hammer_io *ionext;
 
@@ -1129,7 +1134,7 @@ hammer_io_complete(struct buffer_head *bp)
 		 * by the kernel and ref the io so it doesn't get thrown
 		 * away.
 		 */
-		if (bp->b_flags & B_ERROR) {
+		/* XXX if (bp->b_flags & B_ERROR) {
 			lwkt_gettoken(&hmp->fs_token);
 			hammer_critical_error(hmp, NULL, bp->b_error,
 					      "while flushing meta-data");
@@ -1151,10 +1156,10 @@ hammer_io_complete(struct buffer_head *bp)
 			hammer_io_set_modlist(&iou->io);
 			iou->io.modified = 1;
 #endif
-		}
+		} */
 		hammer_stats_disk_write += iou->io.bytes;
-		atomic_add_long(-iou->io.bytes,&hammer_count_io_running_write);
-		atomic_add_long(-iou->io.bytes,&hmp->io_running_space);
+		atomic_add_long(&hammer_count_io_running_write,-iou->io.bytes);
+		atomic_add_long(&hmp->io_running_space,-iou->io.bytes);
 		KKASSERT(hmp->io_running_space >= 0);
 		iou->io.running = 0;
 
@@ -1182,12 +1187,12 @@ hammer_io_complete(struct buffer_head *bp)
 	 * refs or if hammer_io_deallocate() is unable to gain the
 	 * interlock.
 	 */
-	if (bp->b_flags & B_LOCKED) {
-		atomic_add_int(&hammer_count_io_locked, -1);
+	/* if (bp->b_flags & B_LOCKED) {
+		atomic_add_int(-1, &hammer_count_io_locked);
 		bp->b_flags &= ~B_LOCKED;
 		hammer_io_deallocate(bp);
-		/* structure may be dead now */
-	}
+		* structure may be dead now *
+	} */
 	lwkt_reltoken(&hmp->io_token);
 }
 
@@ -1211,28 +1216,28 @@ hammer_io_complete(struct buffer_head *bp)
 static void
 hammer_io_deallocate(struct buffer_head *bp)
 {
-	hammer_io_structure_t iou = (void *)LIST_FIRST(&bp->b_dep);
+	hammer_io_structure_t iou=NULL; /* = (void *)LIST_FIRST(&bp->b_dep); */
 	hammer_mount_t hmp;
 
 	hmp = iou->io.hmp;
 
 	lwkt_gettoken(&hmp->io_token);
 
-	KKASSERT((bp->b_flags & B_LOCKED) == 0 && iou->io.running == 0);
+	/* KKASSERT((bp->b_flags & B_LOCKED) == 0 && iou->io.running == 0); */
 	if (hammer_try_interlock_norefs(&iou->io.lock) == 0) {
 		/*
 		 * We cannot safely disassociate a bp from a referenced
 		 * or interlocked HAMMER structure.
 		 */
-		bp->b_flags |= B_LOCKED;
-		atomic_add_int(&hammer_count_io_locked, 1);
+		/* bp->b_flags |= B_LOCKED; XXX b_flags */
+		atomic_add_int(1,&hammer_count_io_locked);
 	} else if (iou->io.modified) {
 		/*
 		 * It is not legal to disassociate a modified buffer.  This
 		 * case really shouldn't ever occur.
 		 */
-		bp->b_flags |= B_LOCKED;
-		atomic_add_int(&hammer_count_io_locked, 1);
+		/* bp->b_flags |= B_LOCKED; */
+		atomic_add_int(1, &hammer_count_io_locked);
 		hammer_put_interlock(&iou->io.lock, 0);
 	} else {
 		/*
@@ -1319,7 +1324,7 @@ hammer_io_checkread(struct buf *bp)
 static int
 hammer_io_checkwrite(struct buf *bp)
 {
-	hammer_io_t io = (void *)LIST_FIRST(&bp->b_dep);
+	hammer_io_t io=NULL; /* = (void *)LIST_FIRST(&bp->b_dep); */
 	hammer_mount_t hmp = io->hmp;
 
 	/*
@@ -1332,7 +1337,7 @@ hammer_io_checkwrite(struct buf *bp)
 			panic("hammer_io_checkwrite: illegal buffer");
 		if ((bp->b_flags & B_LOCKED) == 0) {
 			bp->b_flags |= B_LOCKED;
-			atomic_add_int(&hammer_count_io_locked, 1);
+			atomic_add_int(1, &hammer_count_io_locked);
 		}
 		lwkt_reltoken(&hmp->io_token);
 		return(1);
@@ -1348,7 +1353,7 @@ hammer_io_checkwrite(struct buf *bp)
 	 */
 	if (hammer_try_interlock_norefs(&io->lock) == 0) {
 		bp->b_flags |= B_LOCKED;
-		atomic_add_int(&hammer_count_io_locked, 1);
+		atomic_add_int(1, &hammer_count_io_locked);
 		lwkt_reltoken(&hmp->io_token);
 		return(1);
 	}
@@ -1456,6 +1461,7 @@ int
 hammer_io_direct_read(hammer_mount_t hmp, struct bio *bio,
 		      hammer_btree_leaf_elm_t leaf)
 {
+	struct hammer_dio_private *dip = bio->bi_private;
 	hammer_off_t buf_offset;
 	hammer_off_t zone2_offset;
 	hammer_volume_t volume;
@@ -1464,7 +1470,7 @@ hammer_io_direct_read(hammer_mount_t hmp, struct bio *bio,
 	int vol_no;
 	int error;
 
-	buf_offset = bio->bio_offset;
+	buf_offset = dip->logical_offset;
 	KKASSERT((buf_offset & HAMMER_OFF_ZONE_MASK) ==
 		 HAMMER_ZONE_LARGE_DATA);
 
@@ -1473,7 +1479,7 @@ hammer_io_direct_read(hammer_mount_t hmp, struct bio *bio,
 	 * write them).  If it does we have to sync any dirty data before
 	 * we can build our direct-read.  This is a non-critical code path.
 	 */
-	bp = bio->bio_buf;
+	/* XX bp = bio->bio_buf; */
 	hammer_sync_buffers(hmp, buf_offset, bp->b_bufsize);
 
 	/*
@@ -1544,14 +1550,16 @@ int
 hammer_io_indirect_read(hammer_mount_t hmp, struct bio *bio,
 			hammer_btree_leaf_elm_t leaf)
 {
+	struct hammer_dio_private *dip = bio->bi_private;
 	hammer_off_t buf_offset;
 	hammer_off_t zone2_offset;
 	hammer_volume_t volume;
-	struct buf *bp;
 	int vol_no;
 	int error;
+	struct buf *bp=(void *)bio;;
 
-	buf_offset = bio->bio_offset;
+
+	buf_offset = dip->logical_offset;
 	KKASSERT((buf_offset & HAMMER_OFF_ZONE_MASK) ==
 		 HAMMER_ZONE_LARGE_DATA);
 
@@ -1560,7 +1568,7 @@ hammer_io_indirect_read(hammer_mount_t hmp, struct bio *bio,
 	 * write them).  If it does we have to sync any dirty data before
 	 * we can build our direct-read.  This is a non-critical code path.
 	 */
-	bp = bio->bio_buf;
+	/* XXX bp = bio->bio_buf; */
 	hammer_sync_buffers(hmp, buf_offset, bp->b_bufsize);
 
 	/*
@@ -1592,10 +1600,10 @@ hammer_io_indirect_read(hammer_mount_t hmp, struct bio *bio,
 			     (zone2_offset & HAMMER_OFF_SHORT_MASK);
 
 		if (leaf && hammer_verify_data) {
-			bio->bio_caller_info1.uvalue32 = leaf->data_crc;
-			bio->bio_caller_info2.index = 1;
+			/* XXX bio->bio_caller_info1.uvalue32 = leaf->data_crc;
+			bio->bio_caller_info2.index = 1; */
 		} else {
-			bio->bio_caller_info2.index = 0;
+			// bio->bio_caller_info2.index = 0;
 		}
 		breadcb(volume->devvp, buf_offset, bp->b_bufsize,
 			hammer_indirect_callback, bio);
@@ -1625,9 +1633,9 @@ done:
 static void
 hammer_indirect_callback(struct bio *bio)
 {
-	struct buf *bp = bio->bio_buf;
-	struct buf *obp;
-	struct bio *obio;
+	struct buf *bp=NULL; // = bio->bio_buf;
+	/* XX Un struct buf *obp; */
+	struct bio *obio=NULL;
 
 	/*
 	 * If BIO_DONE is already set the device buffer was already
@@ -1644,12 +1652,12 @@ hammer_indirect_callback(struct bio *bio)
 	 * fragility there, so we assert that the device buffer covers
 	 * the request.
 	 */
-	if ((bio->bio_flags & BIO_DONE) == 0)
+	/* if ((bio->bio_flags & BIO_DONE) == 0)
 		bpdone(bp, 0);
-	bio->bio_flags &= ~(BIO_DONE | BIO_SYNC);
+	bio->bio_flags &= ~(BIO_DONE | BIO_SYNC); */
 
-	obio = bio->bio_caller_info1.ptr;
-	obp = obio->bio_buf;
+/*	obio = bio->bio_caller_info1.ptr; */
+	/* XXX obp = obio->bio_buf; 
 
 	if (bp->b_flags & B_ERROR) {
 		obp->b_flags |= B_ERROR;
@@ -1664,7 +1672,7 @@ hammer_indirect_callback(struct bio *bio)
 		bcopy(bp->b_data, obp->b_data, obp->b_bufsize);
 		obp->b_resid = 0;
 		obp->b_flags |= B_AGE;
-	}
+	} */
 	biodone(obio);
 	bqrelse(bp);
 }
@@ -1717,7 +1725,7 @@ hammer_io_direct_write(hammer_mount_t hmp, struct bio *bio,
 	hammer_off_t zone2_offset;
 	hammer_volume_t volume;
 	hammer_buffer_t buffer;
-	struct buffer_head *bh_result=(void *)bio;
+	/* XXX unsused struct buffer_head *bh_result=(void *)bio; */
 	struct buf *bp=(void *)bio;
 	struct bio *nbio=(void *)bio;
 	char *ptr;
@@ -1727,7 +1735,7 @@ hammer_io_direct_write(hammer_mount_t hmp, struct bio *bio,
 	buf_offset = leaf->data_offset;
 
 	KKASSERT(buf_offset > HAMMER_ZONE_BTREE);
-	KKASSERT(bio->bio_buf->b_cmd == BUF_CMD_WRITE);
+	/* XX KKASSERT(bio->bio_buf->b_cmd == BUF_CMD_WRITE); */
 
 	/*
 	 * Issue or execute the I/O.  The new memory record must replace
@@ -1748,7 +1756,7 @@ hammer_io_direct_write(hammer_mount_t hmp, struct bio *bio,
 		if (error == 0 && zone2_offset >= volume->maxbuf_off)
 			error = EIO;
 		if (error == 0) {
-			bp = bio->bio_buf;
+			/* XXX bp = bio->bio_buf; */
 			KKASSERT((bp->b_bufsize & HAMMER_BUFMASK) == 0);
 			/*
 			hammer_del_buffers(hmp, buf_offset,
@@ -1762,9 +1770,9 @@ hammer_io_direct_write(hammer_mount_t hmp, struct bio *bio,
 			 *  2nd or 3rd level).
 			 */
 			nbio = push_bio(bio);
-			nbio->bio_offset = zone2_offset;
+			/* nbio->bio_offset = zone2_offset;
 			nbio->bio_done = hammer_io_direct_write_complete;
-			nbio->bio_caller_info1.ptr = record;
+			nbio->bio_caller_info1.ptr = record; */
 			record->zone2_offset = zone2_offset;
 			record->gflags |= HAMMER_RECG_DIRECT_IO |
 					 HAMMER_RECG_DIRECT_INVAL;
@@ -1775,8 +1783,8 @@ hammer_io_direct_write(hammer_mount_t hmp, struct bio *bio,
 			 */
 			zone2_offset &= HAMMER_OFF_SHORT_MASK;
 			nbio = push_bio(nbio);
-			nbio->bio_offset = volume->ondisk->vol_buf_beg +
-					   zone2_offset;
+			/* XXX nbio->bio_offset = volume->ondisk->vol_buf_beg +
+					   zone2_offset; */
 			hammer_stats_disk_write += bp->b_bufsize;
 			hammer_ip_replace_bulk(hmp, record);
 			vn_strategy(volume->devvp, nbio);
@@ -1793,7 +1801,7 @@ hammer_io_direct_write(hammer_mount_t hmp, struct bio *bio,
 		buffer = NULL;
 		ptr = hammer_bread(hmp, buf_offset, &error, &buffer);
 		if (error == 0) {
-			bp = bio->bio_buf;
+			/* bp = bio->bio_buf; */
 			bp->b_flags |= B_AGE;
 			hammer_io_modify(&buffer->io, 1);
 			bcopy(bp->b_data, ptr, leaf->data_len);
@@ -1812,7 +1820,7 @@ hammer_io_direct_write(hammer_mount_t hmp, struct bio *bio,
 		 */
 		kprintf("hammer_direct_write: failed @ %016llx\n",
 			(long long)leaf->data_offset);
-		bp = bio->bio_buf;
+		/* XX bp = bio->bio_buf; */
 		bp->b_resid = 0;
 		bp->b_error = EIO;
 		bp->b_flags |= B_ERROR;
@@ -1838,17 +1846,17 @@ void
 hammer_io_direct_write_complete(struct bio *nbio)
 {
 	struct bio *obio;
-	struct buf *bp;
-	hammer_record_t record;
+	struct buf *bp=(void *)nbio;
+	hammer_record_t record=(void *)nbio;
 	hammer_mount_t hmp;
 
-	record = nbio->bio_caller_info1.ptr;
+	/* XXX record = nbio->bio_caller_info1.ptr; */
 	KKASSERT(record != NULL);
 	hmp = record->ip->hmp;
 
 	lwkt_gettoken(&hmp->io_token);
 
-	bp = nbio->bio_buf;
+	/* XX bp = nbio->bio_buf; */
 	obio = pop_bio(nbio);
 	if (bp->b_flags & B_ERROR) {
 		lwkt_gettoken(&hmp->fs_token);
@@ -1963,8 +1971,9 @@ hammer_io_direct_uncache_callback(hammer_inode_t ip, void *data)
 {
 	hammer_inode_info_t iinfo = data;
 	hammer_off_t file_offset;
-	struct vnode *vp;
+	/* struct vnode *vp;
 	struct buf *bp;
+	*/
 	int blksize;
 
 	if (ip->vp == NULL)
@@ -2035,7 +2044,7 @@ hammer_io_flush_sync(hammer_mount_t hmp)
 	while ((bp = bp_base) != NULL) {
 		/* bp_base = bp->b_bio1.bio_caller_info1.cluster_head;
 		biowait(&bp->b_bio1, "hmrFLS"); XXX */
-		relpbuf(bp, NULL);
+		/* XXX relpbuf(bp, NULL); */
 	}
 }
 

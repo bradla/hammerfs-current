@@ -44,8 +44,6 @@
 #include "hammer.h"
 #include "dfly/sys/fcntl.h"
 #include "dfly/sys/nlookup.h"
-#include "dfly/sys/buf.h"
-#include "dfly/sys/buf2.h"
 
 #define MNT_LAZY        3       /* push data not written by filesystem syncer */
 
@@ -158,8 +156,7 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 			error = vfs_mountedon(volume->devvp);
 		}
 	}
-/* XXX if (error == 0 && vcount(volume->devvp) > 0) */
-	if (error == 0)
+	if (error == 0 && vcount(volume->devvp) > 0)
 		error = EBUSY;
 	if (error == 0) {
 		vn_lock(volume->devvp, LK_EXCLUSIVE | LK_RETRY);
@@ -182,8 +179,7 @@ hammer_install_volume(struct hammer_mount *hmp, const char *volname,
 	 * Extract the volume number from the volume header and do various
 	 * sanity checks.
 	 */
-	error = bread((struct super_block *)volume->devvp,
-					0LL, HAMMER_BUFSIZE, &bp);
+	error = bread(volume->devvp, 0LL, HAMMER_BUFSIZE, &bp);
 	if (error)
 		goto late_failure;
 	ondisk = (void *)bp->b_data;
@@ -281,7 +277,6 @@ hammer_unload_volume(hammer_volume_t volume, void *data __unused)
 {
 	hammer_mount_t hmp = volume->io.hmp;
 	int ronly = ((hmp->mp->mnt_flag & MNT_RDONLY) ? 1 : 0);
-	struct buf *bp;
 
 	/*
 	 * Clean up the root volume pointer, which is held unlocked in hmp.
@@ -296,7 +291,6 @@ hammer_unload_volume(hammer_volume_t volume, void *data __unused)
 	 */
 	hammer_io_clear_modify(&volume->io, 1);
 	volume->io.waitdep = 1;
-	bp = hammer_io_release(&volume->io, 1);
 
 	/*
 	 * Clean up the persistent ref ioerror might have on the volume
@@ -317,8 +311,6 @@ hammer_unload_volume(hammer_volume_t volume, void *data __unused)
 	 * no super-clusters.
 	 */
 	KKASSERT(hammer_norefs(&volume->io.lock));
-	if (bp)
-		dfly_brelse(bp);
 
 	volume->ondisk = NULL;
 	if (volume->devvp) {
@@ -457,7 +449,7 @@ hammer_load_volume(hammer_volume_t volume)
 	int error;
 
 	if (volume->ondisk == NULL) {
-		error = hammer_io_read(volume->sb, &volume->io,
+		error = hammer_io_read(volume->devvp, &volume->io,
 				       HAMMER_BUFSIZE);
 		if (error == 0) {
 			volume->ondisk = (void *)volume->io.bp->b_data;
@@ -598,14 +590,14 @@ found_aliased:
 		 * so the io_token must be held.
 		 */
 		if (buffer->io.mod_root == &hmp->lose_root) {
-			/* XXX lwkt_gettoken(&hmp->io_token); */
+			lwkt_gettoken(&hmp->io_token);
 			if (buffer->io.mod_root == &hmp->lose_root) {
 				RB_REMOVE(hammer_mod_rb_tree,
 					  buffer->io.mod_root, &buffer->io);
 				buffer->io.mod_root = NULL;
 				KKASSERT(buffer->io.modified == 0);
 			}
-			/* XXX lwkt_reltoken(&hmp->io_token); */
+			lwkt_reltoken(&hmp->io_token);
 		}
 		goto found;
 	} else if (hmp->ronly && hammer_direct_zone(buf_offset)) {
@@ -879,10 +871,10 @@ hammer_load_buffer(hammer_buffer_t buffer, int isnew)
 		 * use a different buffer size.
 		 */
 		if (isnew) {
-			error = hammer_io_new(volume->sb, &buffer->io);
+			error = hammer_io_new(volume->devvp, &buffer->io);
 		} else if ((buffer->zoneX_offset & HAMMER_OFF_ZONE_MASK) ==
 			   HAMMER_ZONE_LARGE_DATA) {
-			/* XXX error = hammer_io_read(volume->sb, &buffer->io,
+			/* XXX error = hammer_io_read(volume->devvp, &buffer->io,
 					       buffer->io.bytes); */
 		} else {
 			hammer_off_t limit;
@@ -891,13 +883,13 @@ hammer_load_buffer(hammer_buffer_t buffer, int isnew)
 				 HAMMER_LARGEBLOCK_MASK64) &
 				~HAMMER_LARGEBLOCK_MASK64;
 			limit -= buffer->zone2_offset;
-			error = hammer_io_read(volume->sb, &buffer->io,
+			error = hammer_io_read(volume->devvp, &buffer->io,
 					       limit);
 		}
 		if (error == 0)
 			buffer->ondisk = (void *)buffer->io.bp->b_data;
 	} else if (isnew) {
-		error = hammer_io_new(volume->sb, &buffer->io);
+		error = hammer_io_new(volume->devvp, &buffer->io);
 	} else {
 		error = 0;
 	}
@@ -982,17 +974,17 @@ hammer_ref_buffer(hammer_buffer_t buffer)
 	 * No longer loose.  lose_list requires the io_token.
 	 */
 	if (buffer->io.mod_root == &hmp->lose_root) {
-		/* lwkt_gettoken(&hmp->io_token); */
+		lwkt_gettoken(&hmp->io_token);
 		if (buffer->io.mod_root == &hmp->lose_root) {
 			RB_REMOVE(hammer_mod_rb_tree,
 				  buffer->io.mod_root, &buffer->io);
 			buffer->io.mod_root = NULL;
 		}
-		/* lwkt_reltoken(&hmp->io_token); */
+		lwkt_reltoken(&hmp->io_token);
 	}
 
 	if (locked) {
-		atomic_add_int( 1, &hammer_count_refedbufs);
+		atomic_add_int(1, &hammer_count_refedbufs);
 		error = hammer_load_buffer(buffer, 0);
 		/* NOTE: on error the buffer pointer is stale */
 	} else {

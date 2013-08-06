@@ -1,8 +1,5 @@
-This is a port of the current DragonFlyBSD HammerFS code.
+This is a port of the current DragonFlyBSD HammerFS code as of a few weeks ago 8-5-2013.
 
-This is not for production systems and only use it if you know
-what you are doing. 
+This is not for production systems and only use it if you know what you are doing.
 
-Does not compile yet only some files compile without errors.
-
-Next I will attempt to add the missing DragonflyBSD bits to linux.
+Next I will attempt to add the missing DragonflyBSD bits to the Linux kernel module.

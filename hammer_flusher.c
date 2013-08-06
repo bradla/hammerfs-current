@@ -259,7 +259,7 @@ hammer_flusher_master_thread(void *arg)
 
 	hmp = arg;
 
-	/* XXX lwkt_gettoken(&hmp->fs_token); */
+	lwkt_gettoken(&hmp->fs_token);
 
 	for (;;) {
 		/*
@@ -296,7 +296,7 @@ hammer_flusher_master_thread(void *arg)
 	 */
 	hmp->flusher.td = NULL;
 	wakeup(&hmp->flusher.exiting);
-	/* XXX lwkt_reltoken(&hmp->fs_token); */
+	lwkt_reltoken(&hmp->fs_token);
 	lwkt_exit();
 }
 
@@ -464,7 +464,7 @@ hammer_flusher_slave_thread(void *arg)
 
 	info = arg;
 	hmp = info->hmp;
-	/* XXX lwkt_gettoken(&hmp->fs_token); */
+	lwkt_gettoken(&hmp->fs_token);
 
 	for (;;) {
 		while (info->runstate == 0)
@@ -485,7 +485,7 @@ hammer_flusher_slave_thread(void *arg)
 	}
 	info->td = NULL;
 	wakeup(&info->td);
-	/* XXX lwkt_reltoken(&hmp->fs_token); */
+	lwkt_reltoken(&hmp->fs_token);
 	lwkt_exit();
 }
 
@@ -503,7 +503,7 @@ hammer_flusher_clean_loose_ios(hammer_mount_t hmp)
 	 * The io_token is needed to protect the list.
 	 */
 	if ((io = RB_ROOT(&hmp->lose_root)) != NULL) {
-		/* XXX lwkt_gettoken(&hmp->io_token); */
+		lwkt_gettoken(&hmp->io_token);
 		while ((io = RB_ROOT(&hmp->lose_root)) != NULL) {
 			KKASSERT(io->mod_root == &hmp->lose_root);
 			RB_REMOVE(hammer_mod_rb_tree, io->mod_root, io);
@@ -512,7 +512,7 @@ hammer_flusher_clean_loose_ios(hammer_mount_t hmp)
 			buffer = (void *)io;
 			hammer_rel_buffer(buffer, 0);
 		}
-		/* lwkt_reltoken(&hmp->io_token); XXX */
+		lwkt_reltoken(&hmp->io_token);
 	}
 }
 

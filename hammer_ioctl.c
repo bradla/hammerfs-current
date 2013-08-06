@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2008 The DragonFly Project.  All rights reserved.
- *
+ * 
  * This code is derived from software contributed to The DragonFly Project
  * by Matthew Dillon <dillon@backplane.com>
- *
+ * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- *
+ * 
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  * 3. Neither the name of The DragonFly Project nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific, prior written permission.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -30,18 +30,11 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $DragonFly: src/sys/vfs/hammer/hammer_ioctl.c,
- * v 1.32 2008/11/13 02:23:29 dillon Exp $
+ * 
+ * $DragonFly: src/sys/vfs/hammer/hammer_ioctl.c,v 1.32 2008/11/13 02:23:29 dillon Exp $
  */
 
 #include "hammer.h"
-
-/*
- * Hammer privileges.
- */
-#define PRIV_HAMMER_IOCTL	650	/* can hammer_ioctl(). */
-#define PRIV_HAMMER_VOLUME       651     /* HAMMER volume management */
 
 static int hammer_ioc_gethistory(hammer_transaction_t trans, hammer_inode_t ip,
 				struct hammer_ioc_history *hist);
@@ -55,14 +48,11 @@ static int hammer_ioc_set_version(hammer_transaction_t trans,
 				struct hammer_ioc_version *ver);
 static int hammer_ioc_get_info(hammer_transaction_t trans,
 				struct hammer_ioc_info *info);
-static int hammer_ioc_add_snapshot(hammer_transaction_t trans,
-				hammer_inode_t ip,
+static int hammer_ioc_add_snapshot(hammer_transaction_t trans, hammer_inode_t ip,
 				struct hammer_ioc_snapshot *snap);
-static int hammer_ioc_del_snapshot(hammer_transaction_t trans,
-				hammer_inode_t ip,
+static int hammer_ioc_del_snapshot(hammer_transaction_t trans, hammer_inode_t ip,
 				struct hammer_ioc_snapshot *snap);
-static int hammer_ioc_get_snapshot(hammer_transaction_t trans,
-				hammer_inode_t ip,
+static int hammer_ioc_get_snapshot(hammer_transaction_t trans, hammer_inode_t ip,
 				struct hammer_ioc_snapshot *snap);
 static int hammer_ioc_get_config(hammer_transaction_t trans, hammer_inode_t ip,
 				struct hammer_ioc_config *snap);
@@ -76,13 +66,14 @@ hammer_ioctl(hammer_inode_t ip, u_long com, caddr_t data, int fflag,
 	     struct ucred *cred)
 {
 	struct hammer_transaction trans;
-	int error, nbuf = 0;
+	int error;
+	int nbuf=0;
 
 	error = priv_check_cred(cred, PRIV_HAMMER_IOCTL, 0);
 
 	hammer_start_transaction(&trans, ip->hmp);
 
-	switch (com) {
+	switch(com) {
 	case HAMMERIOC_PRUNE:
 		if (error == 0) {
 			error = hammer_ioc_prune(&trans, ip,
@@ -132,7 +123,7 @@ hammer_ioctl(hammer_inode_t ip, u_long com, caddr_t data, int fflag,
 		break;
 	case HAMMERIOC_UPG_PSEUDOFS:
 		if (error == 0) {
-			error = hammer_ioc_upgrade_pseudofs(&trans, ip,
+			error = hammer_ioc_upgrade_pseudofs(&trans, ip, 
 				    (struct hammer_ioc_pseudofs_rw *)data);
 		}
 		break;
@@ -167,7 +158,7 @@ hammer_ioctl(hammer_inode_t ip, u_long com, caddr_t data, int fflag,
 		}
 		break;
 	case HAMMERIOC_GET_VERSION:
-		error = hammer_ioc_get_version(&trans, ip,
+		error = hammer_ioc_get_version(&trans, ip, 
 				    (struct hammer_ioc_version *)data);
 		break;
 	case HAMMERIOC_GET_INFO:
@@ -176,7 +167,7 @@ hammer_ioctl(hammer_inode_t ip, u_long com, caddr_t data, int fflag,
 		break;
 	case HAMMERIOC_SET_VERSION:
 		if (error == 0) {
-			error = hammer_ioc_set_version(&trans, ip,
+			error = hammer_ioc_set_version(&trans, ip, 
 					    (struct hammer_ioc_version *)data);
 		}
 		break;
@@ -196,56 +187,46 @@ hammer_ioctl(hammer_inode_t ip, u_long com, caddr_t data, int fflag,
 					    (struct hammer_ioc_volume *)data);
 		}
 		break;
+	case HAMMERIOC_LIST_VOLUMES:
+		error = hammer_ioc_volume_list(&trans, ip,
+		    (struct hammer_ioc_volume_list *)data);
+		break;
 	case HAMMERIOC_ADD_SNAPSHOT:
 		if (error == 0) {
 			error = hammer_ioc_add_snapshot(
-					&trans,
-					ip,
-					(struct hammer_ioc_snapshot *)data);
+					&trans, ip, (struct hammer_ioc_snapshot *)data);
 		}
 		break;
 	case HAMMERIOC_DEL_SNAPSHOT:
 		if (error == 0) {
 			error = hammer_ioc_del_snapshot(
-					&trans,
-					ip,
-					(struct hammer_ioc_snapshot *)data);
+					&trans, ip, (struct hammer_ioc_snapshot *)data);
 		}
 		break;
 	case HAMMERIOC_GET_SNAPSHOT:
 		error = hammer_ioc_get_snapshot(
-					&trans,
-					ip,
-					(struct hammer_ioc_snapshot *)data);
+					&trans, ip, (struct hammer_ioc_snapshot *)data);
 		break;
 	case HAMMERIOC_GET_CONFIG:
 		error = hammer_ioc_get_config(
-					&trans,
-					ip,
-					(struct hammer_ioc_config *)data);
+					&trans, ip, (struct hammer_ioc_config *)data);
 		break;
 	case HAMMERIOC_SET_CONFIG:
 		if (error == 0) {
 			error = hammer_ioc_set_config(
-					&trans,
-					ip,
-					(struct hammer_ioc_config *)data);
+					&trans, ip, (struct hammer_ioc_config *)data);
 		}
 		break;
 	case HAMMERIOC_DEDUP:
 		if (error == 0) {
 			error = hammer_ioc_dedup(
-					&trans,
-					ip,
-					(struct hammer_ioc_dedup *)data);
+					&trans, ip, (struct hammer_ioc_dedup *)data);
 		}
 		break;
 	case HAMMERIOC_GET_DATA:
 		if (error == 0) {
 			error = hammer_ioc_get_data(
-					&trans,
-					ip,
-					(struct hammer_ioc_data *)data);
+					&trans, ip, (struct hammer_ioc_data *)data);
 		}
 		break;
 	default:
@@ -253,7 +234,7 @@ hammer_ioctl(hammer_inode_t ip, u_long com, caddr_t data, int fflag,
 		break;
 	}
 	hammer_done_transaction(&trans);
-	return error;
+	return (error);
 }
 
 /*
@@ -276,10 +257,10 @@ hammer_ioc_gethistory(hammer_transaction_t trans, hammer_inode_t ip,
 	 * Validate the structure and initialize for return.
 	 */
 	if (hist->beg_tid > hist->end_tid)
-		return 22; /* EINVAL */
+		return(EINVAL);
 	if (hist->head.flags & HAMMER_IOC_HISTORY_ATKEY) {
 		if (hist->key > hist->nxt_key)
-			return 22; /* EINVAL */
+			return(EINVAL);
 	}
 
 	hist->obj_id = ip->obj_id;
@@ -289,7 +270,7 @@ hammer_ioc_gethistory(hammer_transaction_t trans, hammer_inode_t ip,
 	hist->head.flags &= ~HAMMER_IOC_HISTORY_NEXT_KEY;
 	hist->head.flags &= ~HAMMER_IOC_HISTORY_EOF;
 	hist->head.flags &= ~HAMMER_IOC_HISTORY_UNSYNCED;
-	if ((ip->flags & HAMMER_INODE_MODMASK) &
+	if ((ip->flags & HAMMER_INODE_MODMASK) & 
 	    ~(HAMMER_INODE_ATIME | HAMMER_INODE_MTIME)) {
 		hist->head.flags |= HAMMER_IOC_HISTORY_UNSYNCED;
 	}
@@ -302,7 +283,7 @@ hammer_ioc_gethistory(hammer_transaction_t trans, hammer_inode_t ip,
 	error = hammer_init_cursor(trans, &cursor, &ip->cache[0], NULL);
 	if (error) {
 		hammer_done_cursor(&cursor);
-		return error;
+		return(error);
 	}
 
 	cursor.key_beg.obj_id = hist->obj_id;
@@ -328,12 +309,12 @@ hammer_ioc_gethistory(hammer_transaction_t trans, hammer_inode_t ip,
 		 */
 		cursor.key_beg.key = hist->key;
 		cursor.key_end.key = HAMMER_MAX_KEY;
-		cursor.key_beg.localization = ip->obj_localization +
+		cursor.key_beg.localization = ip->obj_localization + 
 					      HAMMER_LOCALIZE_MISC;
-		cursor.key_end.localization = ip->obj_localization +
+		cursor.key_end.localization = ip->obj_localization + 
 					      HAMMER_LOCALIZE_MISC;
 
-		switch (ip->ino_data.obj_type) {
+		switch(ip->ino_data.obj_type) {
 		case HAMMER_OBJTYPE_REGFILE:
 			++cursor.key_beg.key;
 			cursor.key_beg.rec_type = HAMMER_RECTYPE_DATA;
@@ -373,8 +354,8 @@ hammer_ioc_gethistory(hammer_transaction_t trans, hammer_inode_t ip,
 
 		add_history(ip, hist, elm);
 		if (hist->head.flags & (HAMMER_IOC_HISTORY_NEXT_TID |
-						HAMMER_IOC_HISTORY_NEXT_KEY |
-						HAMMER_IOC_HISTORY_EOF)) {
+				        HAMMER_IOC_HISTORY_NEXT_KEY |
+				        HAMMER_IOC_HISTORY_EOF)) {
 			break;
 		}
 		error = hammer_btree_iterate(&cursor);
@@ -384,7 +365,7 @@ hammer_ioc_gethistory(hammer_transaction_t trans, hammer_inode_t ip,
 		error = 0;
 	}
 	hammer_done_cursor(&cursor);
-	return error;
+	return(error);
 }
 
 /*
@@ -496,7 +477,7 @@ hammer_ioc_synctid(hammer_transaction_t trans, hammer_inode_t ip,
 	hammer_mount_t hmp = ip->hmp;
 	int error = 0;
 
-	switch (std->op) {
+	switch(std->op) {
 	case HAMMER_SYNCTID_NONE:
 		std->tid = hmp->flusher.tid;	/* inaccurate */
 		break;
@@ -520,7 +501,7 @@ hammer_ioc_synctid(hammer_transaction_t trans, hammer_inode_t ip,
 		error = EOPNOTSUPP;
 		break;
 	}
-	return error;
+	return(error);
 }
 
 /*
@@ -545,7 +526,7 @@ hammer_ioc_get_version(hammer_transaction_t trans, hammer_inode_t ip,
 	ver->max_version = HAMMER_VOL_VERSION_MAX;
 	if (ver->cur_version == 0)
 		ver->cur_version = trans->hmp->version;
-	switch (ver->cur_version) {
+	switch(ver->cur_version) {
 	case 1:
 		ksnprintf(ver->description, sizeof(ver->description),
 			 "First HAMMER release (DragonFly 2.0+)");
@@ -566,13 +547,17 @@ hammer_ioc_get_version(hammer_transaction_t trans, hammer_inode_t ip,
 		ksnprintf(ver->description, sizeof(ver->description),
 			 "Adjustments for dedup support (DragonFly 2.9+)");
 		break;
+	case 6:
+		ksnprintf(ver->description, sizeof(ver->description),
+			  "Directory Hash ALG1 (tmp/rename resistance)");
+		break;
 	default:
 		ksnprintf(ver->description, sizeof(ver->description),
 			 "Unknown");
-		error = 22; /* EINVAL */
+		error = EINVAL;
 		break;
 	}
-	return error;
+	return(error);
 };
 
 /*
@@ -595,14 +580,14 @@ hammer_ioc_set_version(hammer_transaction_t trans, hammer_inode_t ip,
 	 */
 	if (ver->cur_version < hmp->version) {
 		if (!(ver->cur_version == 3 && hmp->version == 4))
-			return 22; /* EINVAL */
+			return(EINVAL);
 	}
 	if (ver->cur_version == hmp->version)
-		return 0;
+		return(0);
 	if (ver->cur_version > HAMMER_VOL_VERSION_MAX)
-		return 22; /* EINVAL */
+		return(EINVAL);
 	if (hmp->ronly)
-		return 30; /* EROFS */
+		return(EROFS);
 
 	/*
 	 * Update the root volume header and the version cached in
@@ -642,7 +627,7 @@ hammer_ioc_set_version(hammer_transaction_t trans, hammer_inode_t ip,
 failed:
 	ver->head.error = error;
 	hammer_done_cursor(&cursor);
-	return 0;
+	return(0);
 }
 
 /*
@@ -653,7 +638,7 @@ int
 hammer_ioc_get_info(hammer_transaction_t trans, struct hammer_ioc_info *info) {
 
 	struct hammer_volume_ondisk	*od = trans->hmp->rootvol->ondisk;
-	struct hammer_mount *hm = trans->hmp;
+	struct hammer_mount 		*hm = trans->hmp;
 
 	/* Fill the structure with the necessary information */
 	_hammer_checkspace(hm, HAMMER_CHKSPC_WRITE, &info->rsvbigblocks);
@@ -695,9 +680,9 @@ hammer_ioc_add_snapshot(hammer_transaction_t trans, hammer_inode_t ip,
 	 * Validate structure
 	 */
 	if (snap->count > HAMMER_SNAPS_PER_IOCTL)
-		return 22; /* EINVAL */
+		return (EINVAL);
 	if (snap->index > snap->count)
-		return 22; /* EINVAL */
+		return (EINVAL);
 
 	hammer_lock_ex(&hmp->snapshot_lock);
 again:
@@ -708,7 +693,7 @@ again:
 	error = hammer_init_cursor(trans, &cursor, &ip->cache[0], NULL);
 	if (error) {
 		hammer_done_cursor(&cursor);
-		return error;
+		return(error);
 	}
 
 	cursor.asof = HAMMER_MAX_TID;
@@ -753,7 +738,7 @@ again:
 	snap->head.error = error;
 	hammer_done_cursor(&cursor);
 	hammer_unlock(&hmp->snapshot_lock);
-	return 0;
+	return(0);
 }
 
 /*
@@ -772,9 +757,9 @@ hammer_ioc_del_snapshot(hammer_transaction_t trans, hammer_inode_t ip,
 	 * Validate structure
 	 */
 	if (snap->count > HAMMER_SNAPS_PER_IOCTL)
-		return 22; /* EINVAL */
+		return (EINVAL);
 	if (snap->index > snap->count)
-		return 22; /* EINVAL */
+		return (EINVAL);
 
 	hammer_lock_ex(&hmp->snapshot_lock);
 again:
@@ -785,7 +770,7 @@ again:
 	error = hammer_init_cursor(trans, &cursor, &ip->cache[0], NULL);
 	if (error) {
 		hammer_done_cursor(&cursor);
-		return error;
+		return(error);
 	}
 
 	cursor.key_beg.obj_id = HAMMER_OBJID_ROOT;
@@ -793,8 +778,7 @@ again:
 	cursor.key_beg.delete_tid = 0;
 	cursor.key_beg.obj_type = 0;
 	cursor.key_beg.rec_type = HAMMER_RECTYPE_SNAPSHOT;
-	cursor.key_beg.localization =
-		ip->obj_localization + HAMMER_LOCALIZE_INODE;
+	cursor.key_beg.localization = ip->obj_localization + HAMMER_LOCALIZE_INODE;
 	cursor.asof = HAMMER_MAX_TID;
 	cursor.flags |= HAMMER_CURSOR_ASOF;
 
@@ -819,7 +803,7 @@ again:
 	snap->head.error = error;
 	hammer_done_cursor(&cursor);
 	hammer_unlock(&hmp->snapshot_lock);
-	return 0;
+	return(0);
 }
 
 /*
@@ -844,9 +828,9 @@ hammer_ioc_get_snapshot(hammer_transaction_t trans, hammer_inode_t ip,
 	 * Validate structure
 	 */
 	if (snap->index != 0)
-		return 22; /* EINVAL */
+		return (EINVAL);
 	if (snap->count > HAMMER_SNAPS_PER_IOCTL)
-		return 22; /* EINVAL */
+		return (EINVAL);
 
 	/*
 	 * Look for keys starting after the previous iteration, or at
@@ -855,7 +839,7 @@ hammer_ioc_get_snapshot(hammer_transaction_t trans, hammer_inode_t ip,
 	error = hammer_init_cursor(trans, &cursor, &ip->cache[0], NULL);
 	if (error) {
 		hammer_done_cursor(&cursor);
-		return error;
+		return(error);
 	}
 
 	cursor.key_beg.obj_id = HAMMER_OBJID_ROOT;
@@ -863,13 +847,11 @@ hammer_ioc_get_snapshot(hammer_transaction_t trans, hammer_inode_t ip,
 	cursor.key_beg.delete_tid = 0;
 	cursor.key_beg.obj_type = 0;
 	cursor.key_beg.rec_type = HAMMER_RECTYPE_SNAPSHOT;
-	cursor.key_beg.localization =
-		ip->obj_localization + HAMMER_LOCALIZE_INODE;
+	cursor.key_beg.localization = ip->obj_localization + HAMMER_LOCALIZE_INODE;
 	if (snap->count == 0)
 		cursor.key_beg.key = HAMMER_MIN_KEY;
 	else
-		cursor.key_beg.key =
-			(int64_t)snap->snaps[snap->count - 1].tid + 1;
+		cursor.key_beg.key = (int64_t)snap->snaps[snap->count - 1].tid + 1;
 
 	cursor.key_end = cursor.key_beg;
 	cursor.key_end.key = HAMMER_MAX_KEY;
@@ -921,7 +903,7 @@ hammer_ioc_get_snapshot(hammer_transaction_t trans, hammer_inode_t ip,
 	}
 	snap->head.error = error;
 	hammer_done_cursor(&cursor);
-	return 0;
+	return(0);
 }
 
 /*
@@ -939,7 +921,7 @@ hammer_ioc_get_config(hammer_transaction_t trans, hammer_inode_t ip,
 	error = hammer_init_cursor(trans, &cursor, &ip->cache[0], NULL);
 	if (error) {
 		hammer_done_cursor(&cursor);
-		return error;
+		return(error);
 	}
 
 	cursor.key_beg.obj_id = HAMMER_OBJID_ROOT;
@@ -947,8 +929,7 @@ hammer_ioc_get_config(hammer_transaction_t trans, hammer_inode_t ip,
 	cursor.key_beg.delete_tid = 0;
 	cursor.key_beg.obj_type = 0;
 	cursor.key_beg.rec_type = HAMMER_RECTYPE_CONFIG;
-	cursor.key_beg.localization =
-		ip->obj_localization + HAMMER_LOCALIZE_INODE;
+	cursor.key_beg.localization = ip->obj_localization + HAMMER_LOCALIZE_INODE;
 	cursor.key_beg.key = 0;		/* config space page 0 */
 
 	cursor.asof = HAMMER_MAX_TID;
@@ -964,7 +945,7 @@ hammer_ioc_get_config(hammer_transaction_t trans, hammer_inode_t ip,
 	/* error can be ENOENT */
 	config->head.error = error;
 	hammer_done_cursor(&cursor);
-	return 0;
+	return(0);
 }
 
 /*
@@ -987,7 +968,7 @@ again:
 	error = hammer_init_cursor(trans, &cursor, &ip->cache[0], NULL);
 	if (error) {
 		hammer_done_cursor(&cursor);
-		return error;
+		return(error);
 	}
 
 	bzero(&leaf, sizeof(leaf));
@@ -1035,7 +1016,7 @@ again:
 	}
 	config->head.error = error;
 	hammer_done_cursor(&cursor);
-	return 0;
+	return(0);
 }
 
 static
@@ -1070,5 +1051,5 @@ hammer_ioc_get_data(hammer_transaction_t trans, hammer_inode_t ip,
 
 failed:
 	hammer_done_cursor(&cursor);
-	return error;
+	return (error);
 }

@@ -261,7 +261,7 @@ int hammerfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 }
 
 struct inode_operations hammerfs_inode_operations = {
-	.lookup = hammerfs_inode_lookup,
+	/* .lookup = hammerfs_inode_lookup, XXX */
 	.setattr = hammerfs_setattr,
 	.getattr = hammerfs_getattr
 };

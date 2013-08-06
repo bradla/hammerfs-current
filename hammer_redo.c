@@ -40,8 +40,6 @@
 
 #include "hammer.h"
 
-int64_t hammer_stats_redo;
-
 RB_GENERATE2(hammer_redo_rb_tree, hammer_inode, rb_redonode,
 	     hammer_redo_rb_compare, hammer_off_t, redo_fifo_start);
 

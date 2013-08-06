@@ -241,7 +241,6 @@ struct hammer_ioc_info {
 	int64_t		reservedext[16];
 };
 
-
 /*
  * HAMMERIOC_GET_PSEUDOFS
  * HAMMERIOC_SET_PSEUDOFS
@@ -344,6 +343,11 @@ struct hammer_ioc_volume {
 	int64_t			vol_size;
 	int64_t			boot_area_size;
 	int64_t			mem_area_size;
+};
+
+struct hammer_ioc_volume_list {
+	struct hammer_ioc_volume *vols;
+	int nvols;
 };
 
 union hammer_ioc_mrecord_any {
@@ -462,11 +466,9 @@ struct hammer_ioc_data {
 	int				size;	/* max size */
 };
 
-
 /*
  * Ioctl cmd ids
  */
-
 #define HAMMERIOC_PRUNE		_IOWR('h',1,struct hammer_ioc_prune)
 #define HAMMERIOC_GETHISTORY	_IOWR('h',2,struct hammer_ioc_history)
 #define HAMMERIOC_REBLOCK	_IOWR('h',3,struct hammer_ioc_reblock)
@@ -492,6 +494,7 @@ struct hammer_ioc_data {
 #define HAMMERIOC_DEL_VOLUME 	_IOWR('h',24,struct hammer_ioc_volume)
 #define HAMMERIOC_DEDUP		_IOWR('h',25,struct hammer_ioc_dedup)
 #define HAMMERIOC_GET_DATA	_IOWR('h',26,struct hammer_ioc_data)
+#define HAMMERIOC_LIST_VOLUMES	_IOWR('h',27,struct hammer_ioc_volume_list)
 
 #endif
 

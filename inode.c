@@ -13,6 +13,9 @@
 #include "dfly_wrap.h"
 #include "hammer.h"
 
+#undef min
+static inline unsigned int min(unsigned int a,  unsigned int b) { return (a < b ? a : b); }
+
 struct inode *hammerfs_iget(struct super_block *sb, ino_t ino);
 int hammerfs_readpage(struct file *file, struct page *page);
 

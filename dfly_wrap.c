@@ -108,6 +108,44 @@ int copyin(const void *udaddr, void *kaddr, size_t len)
 	return 0;
 }
 
+/*
+ * When initiating asynchronous I/O, change ownership of the lock to the
+ * kernel. Once done, the lock may legally released by biodone. The
+ * original owning process can no longer acquire it recursively, but must
+ * wait until the I/O is completed and the lock has been freed by biodone.
+ */
+void BUF_KERNPROC(struct buf *bp)
+{
+	panic("BUF_KERNPROC");
+	//lockmgr_kernproc(&(bp)->b_lock);
+}
+
+#define PINTERLOCKED    0x00000400      /* Interlocked tsleep */
+
+int atomic_cmpset_int(volatile u_int *dst, u_int exp, u_int src)
+{
+	u_char res;
+
+	asm volatile(
+	"	pushfq ;		"
+	"	cli ;			"
+	"	cmpl	%3,%4 ;		"
+	"	jne	1f ;		"
+	"	movl	%2,%1 ;		"
+	"1:				"
+	"       sete	%0 ;		"
+	"	popfq ;			"
+	"# atomic_cmpset_int"
+	: "=q" (res),			/* 0 */
+	  "=m" (*dst)			/* 1 */
+	: "r" (src),			/* 2 */
+	  "r" (exp),			/* 3 */
+	  "m" (*dst)			/* 4 */
+	: "memory");
+
+	return res;
+}
+
 /**
  * atomic_add - add integer to atomic variable
  * @i: integer value to add
@@ -115,7 +153,7 @@ int copyin(const void *udaddr, void *kaddr, size_t len)
  *
  * Atomically adds @i to @v.
  */
-/* static inline */ void atomic_add_long(int v, long i)
+/* static inline */ void atomic_add_long(long int *v, long i)
 {
 /*
          asm volatile(LOCK_PREFIX "addl %1,%0"
@@ -140,7 +178,7 @@ cpu_sfence(void)
          asm volatile("" : : : "memory");
 }
 
-static inline void
+void
 cpu_ccfence(void)
 {
         /*
@@ -540,7 +578,7 @@ findblk(struct vnode *vp, off_t loffset, int flags)
 
 int hidirtybufspace;
 
-int bread(struct super_block *sb, off_t loffset, int size, struct buf **bpp)
+int bread( struct vnode *devvp /*struct super_block *sb*/, off_t loffset, int size, struct buf **bpp)
 {
 	struct buffer_head *bh;
 	unsigned i, num;
@@ -568,7 +606,7 @@ int bread(struct super_block *sb, off_t loffset, int size, struct buf **bpp)
 	block = loffset / BLOCK_SIZE;
 
 	for (i = 0; i < num; ++i) {
-		bh = sb_bread(sb, block + i);
+		bh = sb_bread(devvp->sb, block + i);
 		if (!bh) {
 			error = -ENOMEM;
 			goto failed;
@@ -582,8 +620,62 @@ failed:
 	return error;
 }
 
+/*
+ * bwrite:
+ *
+ *	Synchronous write, waits for completion.
+ *
+ *	Write, release buffer on completion.  (Done by iodone
+ *	if async).  Do not bother writing anything if the buffer
+ *	is invalid.
+ *
+ *	Note that we set B_CACHE here, indicating that buffer is
+ *	fully valid and thus cacheable.  This is true even of NFS
+ *	now so we set it generally.  This could be set either here 
+ *	or in biodone() since the I/O is synchronous.  We put it
+ *	here.
+ */
+int
+bwrite(struct buf *bp)
+{
+	panic("bwrite");
+/*
+	int error;
+
+	if (bp->b_flags & B_INVAL) {
+		brelse(bp);
+		return (0);
+	}
+	if (BUF_REFCNTNB(bp) == 0)
+		panic("bwrite: buffer is not busy???");
+
+	* Mark the buffer clean 
+	bundirty(bp);
+
+	bp->b_flags &= ~(B_ERROR | B_EINTR);
+	bp->b_flags |= B_CACHE;
+	bp->b_cmd = BUF_CMD_WRITE;
+	bp->b_bio1.bio_done = biodone_sync;
+	bp->b_bio1.bio_flags |= BIO_SYNC;
+	vfs_busy_pages(bp->b_vp, bp);
+
+	
+	 * Normal bwrites pipeline writes.  NOTE: b_bufsize is only
+	 * valid for vnode-backed buffers.
+	
+	bsetrunningbufspace(bp, bp->b_bufsize);
+	vn_strategy(bp->b_vp, &bp->b_bio1);
+	error = biowait(&bp->b_bio1, "biows");
+	brelse(bp);
+
+	return (error);
+*/
+}
+
 #ifndef _LINUX_BUFFER_HEAD_H
-void brelse(struct buf *bp)
+#undef brelse
+void
+brelse(struct buf *bp)
 {
 	panic("brelse");
 }
@@ -629,13 +721,17 @@ void *dfly_kmalloc(unsigned long size, struct malloc_type *type, int flags)
 MALLOC_DEFINE(M_TEMP, "temp", "misc temporary data buffers");
 
 /* from kern/kern_synch.c */
-int tsleep(void *ident, int flags, const char *wmesg, int timo)
+/* int
+tsleep(const volatile void *ident, int flags, const char *wmesg, int timo)*/
+
+int
+tsleep(const volatile void *ident, int flags, const char *wmesg, int timo)
 {
     /* panic("tsleep"); */
 	return 0;
 }
 
-void wakeup(void *ident)
+void wakeup(const volatile void *ident)
 {
 	panic("wakeup");
 }
@@ -699,3 +795,677 @@ vput(struct vnode *vp)
 /*         vn_unlock(vp);
          vrele(vp); */
 }
+
+/*
+ * BIO tracking structure - tracks in-progress BIOs
+ */
+struct bio_track {
+	int     bk_active;      /* I/O's currently in progress */
+};
+
+/*
+ * runningbufwakeup:
+ *
+ *	Accounting for I/O in progress.
+ *
+ */
+static inline void
+runningbufwakeup(struct buf *bp)
+{
+	panic("runningbufwakeup");
+/*
+	long totalspace;
+	long limit;
+
+	if ((totalspace = bp->b_runningbufspace) != 0) {
+		spin_lock(&bufcspin);
+		runningbufspace -= totalspace;
+		--runningbufcount;
+		bp->b_runningbufspace = 0;
+
+		 * see waitrunningbufspace() for limit test.
+
+		limit = hirunningspace * 3 / 6;
+		if (runningbufreq && runningbufspace <= limit) {
+			runningbufreq = 0;
+			spin_unlock(&bufcspin);
+			wakeup(&runningbufreq);
+		} else {
+			spin_unlock(&bufcspin);
+		}
+		bd_signal(totalspace);
+	}
+*/
+}
+
+/*
+ * bqrelse:
+ *
+ *	Release a buffer back to the appropriate queue but do not try to free
+ *	it.  The buffer is expected to be used again soon.
+ *
+ *	bqrelse() is used by bdwrite() to requeue a delayed write, and used by
+ *	biodone() to requeue an async I/O on completion.  It is also used when
+ *	known good buffers need to be requeued but we think we may need the data
+ *	again soon.
+ *
+ *	XXX we should be able to leave the B_RELBUF hint set on completion.
+ *
+ * MPSAFE
+ */
+void
+bqrelse(struct buf *bp)
+{
+	panic("bqrelse");
+}
+
+/*
+ * bpdone:
+ *
+ *	Finish I/O on a buffer after all BIOs have been processed.
+ *	Called when the bio chain is exhausted or by biowait.  If called
+ *	by biowait, elseit is typically 0.
+ *
+ *	bpdone is also responsible for setting B_CACHE in a B_VMIO bp.
+ *	In a non-VMIO bp, B_CACHE will be set on the next getblk() 
+ *	assuming B_INVAL is clear.
+ *
+ *	For the VMIO case, we set B_CACHE if the op was a read and no
+ *	read error occured, or if the op was a write.  B_CACHE is never
+ *	set if the buffer is invalid or otherwise uncacheable.
+ *
+ *	bpdone does not mess with B_INVAL, allowing the I/O routine or the
+ *	initiator to leave B_INVAL set to brelse the buffer out of existance
+ *	in the biodone routine.
+ */
+void
+bpdone(struct buf *bp, int elseit)
+{
+	panic("bpdone");
+}
+
+/*
+ * Normal biodone.
+ */
+void biodone(struct bio *bio)
+{
+	struct buf *bp;
+ 	panic("biodone");
+
+	/*
+     * Run up the chain of BIO's.   Leave b_cmd intact for the duration.
+     */
+/*
+    struct buf *bp = bio->bio_buf;
+ 	runningbufwakeup(bp);
+          while (bio) {
+                  biodone_t *done_func;
+                  struct bio_track *track;
+  
+                  *
+                   * BIO tracking.  Most but not all BIOs are tracked.
+                   *
+                  if ((track = bio->bio_track) != NULL) {
+                          bio_track_rel(track);
+                          bio->bio_track = NULL;
+                  }
+  
+                  *
+                   * A bio_done function terminates the loop.  The function
+                   * will be responsible for any further chaining and or
+                   * buffer management.
+                   *
+                   * WARNING!  The done function can deallocate the buffer!
+                   *
+                  if ((done_func = bio->bio_done) != NULL) {
+                          bio->bio_done = NULL;
+                          done_func(bio);
+                          return;
+                  }
+                  bio = bio->bio_prev;
+          }
+  */
+          /*
+          * If we've run out of bio's do normal [a]synchronous completion.
+          */
+         bpdone(bp, 1);
+ }
+
+/*
+ * Push another BIO layer onto an existing BIO and return it.  The new
+ * BIO layer may already exist, holding cached translation data.
+ */
+struct bio *push_bio(struct bio *bio)
+{
+        struct bio *nbio;
+	panic("push_bio");
+/*
+        if ((nbio = bio->bio_next) == NULL) {
+                int index = bio - &bio->bio_buf->b_bio_array[0];
+                if (index >= NBUF_BIO - 1) {
+                        panic("push_bio: too many layers bp %p",
+                                bio->bio_buf);
+                }
+
+                nbio = &bio->bio_buf->b_bio_array[index + 1];
+                bio->bio_next = nbio;
+                nbio->bio_prev = bio;
+                nbio->bio_buf = bio->bio_buf;
+                nbio->bio_offset = NOOFFSET;
+                nbio->bio_done = NULL;
+                nbio->bio_next = NULL;
+        } */
+        /* KKASSERT(nbio->bio_done == NULL); */
+        return(nbio);
+}
+
+/*
+ * Pop a BIO translation layer, returning the previous layer.  The
+ * must have been previously pushed.
+ */
+struct bio *
+pop_bio(struct bio *bio)
+{
+	panic("pop_bio");
+	/* return(bio->bio_prev); */
+}
+
+/*
+ * regetblk(bp)
+ *
+ * Reacquire a buffer that was previously released to the locked queue,
+ * or reacquire a buffer which is interlocked by having bioops->io_deallocate
+ * set B_LOCKED (which handles the acquisition race).
+ *
+ * To this end, either B_LOCKED must be set or the dependancy list must be
+ * non-empty.
+ *
+ * MPSAFE
+ */
+void
+regetblk(struct buf *bp)
+{
+	panic("regetblk");
+	/* KKASSERT((bp->b_flags & B_LOCKED) || LIST_FIRST(&bp->b_dep) != NULL); 
+	BUF_LOCK(bp, LK_EXCLUSIVE | LK_RETRY); */
+	kfree(bp); 
+}
+
+struct buf *getblk (struct vnode *vp, off_t loffset, int size, int blkflags, int slptimeo) 
+{
+	panic("getblk");
+}
+
+/*
+ * geteblk:
+ *
+ *	Get an empty, disassociated buffer of given size.  The buffer is
+ *	initially set to B_INVAL.
+ *
+ *	critical section protection is not required for the allocbuf()
+ *	call because races are impossible here.
+ *
+ * MPALMOSTSAFE
+ */
+struct buf *geteblk(int size)
+{
+	panic("geteblk");
+	
+/*
+	struct buf *bp;
+	int maxsize;
+
+	maxsize = (size + BKVAMASK) & ~BKVAMASK;
+
+	while ((bp = getnewbuf(0, 0, size, maxsize)) == NULL)
+		;
+	allocbuf(bp, size); */
+	//bp->b_flags |= B_INVAL;	/* b_dep cleared by getnewbuf() */
+	//KKASSERT(dsched_is_clear_buf_priv(bp));
+	//return (bp);
+}
+
+void
+bcopy(const void *src, void *dst, size_t len)
+{
+	const char *s = src;
+	char *d = dst;
+
+	while (len-- != 0)
+		*d++ = *s++;
+}
+
+/*
+ * vfs_bio_clrbuf:
+ *
+ *	Clear a buffer.  This routine essentially fakes an I/O, so we need
+ *	to clear B_ERROR and B_INVAL.
+ *
+ *	Note that while we only theoretically need to clear through b_bcount,
+ *	we go ahead and clear through b_bufsize.
+ */
+
+void
+vfs_bio_clrbuf(struct buf *bp)
+{
+	panic("vfs_bio_clrbuf");
+/*
+	int i, mask = 0;
+	caddr_t sa, ea;
+	if ((bp->b_flags & (B_VMIO | B_MALLOC)) == B_VMIO) {
+		bp->b_flags &= ~(B_INVAL | B_EINTR | B_ERROR);
+		if ((bp->b_xio.xio_npages == 1) && (bp->b_bufsize < PAGE_SIZE) &&
+		    (bp->b_loffset & PAGE_MASK) == 0) {
+			mask = (1 << (bp->b_bufsize / DEV_BSIZE)) - 1;
+			if ((bp->b_xio.xio_pages[0]->valid & mask) == mask) {
+				bp->b_resid = 0;
+				return;
+			}
+			if (((bp->b_xio.xio_pages[0]->flags & PG_ZERO) == 0) &&
+			    ((bp->b_xio.xio_pages[0]->valid & mask) == 0)) {
+				bzero(bp->b_data, bp->b_bufsize);
+				bp->b_xio.xio_pages[0]->valid |= mask;
+				bp->b_resid = 0;
+				return;
+			}
+		}
+		sa = bp->b_data;
+		for(i=0;i<bp->b_xio.xio_npages;i++,sa=ea) {
+			int j = ((vm_offset_t)sa & PAGE_MASK) / DEV_BSIZE;
+			ea = (caddr_t)trunc_page((vm_offset_t)sa + PAGE_SIZE);
+			ea = (caddr_t)(vm_offset_t)ulmin(
+			    (u_long)(vm_offset_t)ea,
+			    (u_long)(vm_offset_t)bp->b_data + bp->b_bufsize);
+			mask = ((1 << ((ea - sa) / DEV_BSIZE)) - 1) << j;
+			if ((bp->b_xio.xio_pages[i]->valid & mask) == mask)
+				continue;
+			if ((bp->b_xio.xio_pages[i]->valid & mask) == 0) {
+				if ((bp->b_xio.xio_pages[i]->flags & PG_ZERO) == 0) {
+					bzero(sa, ea - sa);
+				}
+			} else {
+				for (; sa < ea; sa += DEV_BSIZE, j++) {
+					if (((bp->b_xio.xio_pages[i]->flags & PG_ZERO) == 0) &&
+						(bp->b_xio.xio_pages[i]->valid & (1<<j)) == 0)
+						bzero(sa, DEV_BSIZE);
+				}
+			}
+			bp->b_xio.xio_pages[i]->valid |= mask;
+			vm_page_flag_clear(bp->b_xio.xio_pages[i], PG_ZERO);
+		}
+		bp->b_resid = 0;
+	} else {
+		clrbuf(bp);
+	}
+*/
+}
+
+/*
+ * Adjust buffer cache buffer's activity count.  This
+ * works similarly to vm_page->act_count.
+ */
+void
+buf_act_advance(struct buf *bp)
+{
+	panic("buf_act_advance");
+/*
+	if (bp->b_act_count > ACT_MAX - ACT_ADVANCE)
+		bp->b_act_count = ACT_MAX;
+	else
+		bp->b_act_count += ACT_ADVANCE;
+*/
+}
+
+/*
+ * bremfree:
+ *
+ *	Remove the buffer from the appropriate free list.
+ */
+static inline void
+_bremfree(struct buf *bp)
+{
+	panic("_bremfree");
+/*
+	if (bp->b_qindex != BQUEUE_NONE) {
+		KASSERT(BUF_REFCNTNB(bp) == 1, 
+				("bremfree: bp %p not locked",bp));
+		TAILQ_REMOVE(&bufqueues[bp->b_qindex], bp, b_freelist);
+		bp->b_qindex = BQUEUE_NONE;
+	} else {
+		if (BUF_REFCNTNB(bp) <= 1)
+			panic("bremfree: removing a buffer not on a queue");
+	}
+*/
+}
+
+void
+bremfree(struct buf *bp)
+{
+	//spin_lock(&bufqspin);
+	_bremfree(bp);
+	//spin_unlock(&bufqspin);
+}
+
+/*
+ * bdwrite:
+ *
+ *	Delayed write. (Buffer is marked dirty).  Do not bother writing
+ *	anything if the buffer is marked invalid.
+ *
+ *	Note that since the buffer must be completely valid, we can safely
+ *	set B_CACHE.  In fact, we have to set B_CACHE here rather then in
+ *	biodone() in order to prevent getblk from writing the buffer
+ *	out synchronously.
+ */
+void
+bdwrite(struct buf *bp)
+{
+	panic("bdwrite");
+
+	/*
+	 * note: we cannot initiate I/O from a bdwrite even if we wanted to,
+	 * due to the softdep code.
+	 */
+}
+
+/*
+ * This is the clustered version of bawrite().  It works similarly to
+ * cluster_write() except I/O on the buffer is guaranteed to occur.
+ */
+int
+cluster_awrite(struct buf *bp)
+{
+	panic("cluser_awrite");
+}
+
+/*
+ * Initiate I/O on a vnode.
+ *
+ * SWAPCACHE OPERATION:
+ *
+ *	Real buffer cache buffers have a non-NULL bp->b_vp.  Unfortunately
+ *	devfs also uses b_vp for fake buffers so we also have to check
+ *	that B_PAGING is 0.  In this case the passed 'vp' is probably the
+ *	underlying block device.  The swap assignments are related to the
+ *	buffer cache buffer's b_vp, not the passed vp.
+ *
+ *	The passed vp == bp->b_vp only in the case where the strategy call
+ *	is made on the vp itself for its own buffers (a regular file or
+ *	block device vp).  The filesystem usually then re-calls vn_strategy()
+ *	after translating the request to an underlying device.
+ *
+ *	Cluster buffers set B_CLUSTER and the passed vp is the vp of the
+ *	underlying buffer cache buffers.
+ *
+ *	We can only deal with page-aligned buffers at the moment, because
+ *	we can't tell what the real dirty state for pages straddling a buffer
+ *	are.
+ *
+ *	In order to call swap_pager_strategy() we must provide the VM object
+ *	and base offset for the underlying buffer cache pages so it can find
+ *	the swap blocks.
+ */
+void
+vn_strategy(struct vnode *vp, struct bio *bio)
+{
+	panic("vn_strategy");
+}
+
+/*
+ * This version of bread issues any required I/O asyncnronously and
+ * makes a callback on completion.
+ *
+ * The callback must check whether BIO_DONE is set in the bio and issue
+ * the bpdone(bp, 0) if it isn't.  The callback is responsible for clearing
+ * BIO_DONE and disposing of the I/O (bqrelse()ing it).
+ */
+void
+breadcb(struct vnode *vp, off_t loffset, int size,
+	void (*func)(struct bio *), void *arg)
+{
+	panic("breadcb");
+}
+
+/*
+ * Simple call that a filesystem can make to try to get rid of a
+ * vnode.  It will fail if anyone is referencing the vnode (including
+ * the caller).
+ *
+ * The filesystem can check whether its in-memory inode structure still
+ * references the vp on return.
+ */
+void
+vclean_unlocked(struct vnode *vp)
+{
+	panic("vclean_unlocked");
+/*
+	vx_get(vp);
+	if (sysref_isactive(&vp->v_sysref) == 0)
+		vgone_vxlocked(vp);
+	vx_put(vp);
+*/
+}
+
+/*
+ * Return TRUE if we are under our severe low-free-pages threshold
+ *
+ * This causes user processes to stall to avoid exhausting memory that
+ * the kernel might need.
+ *
+ * reserved < severe < minimum < target < paging_target
+ */
+int
+vm_page_count_severe(void)
+{
+		panic("vm_page_count_severe");
+}
+
+/****************************************************************
+ *			VNODE ACQUISITION FUNCTIONS		*
+ ****************************************************************
+ *
+ * These functions must be used when accessing a vnode via an auxiliary
+ * reference such as the namecache or free list, or when you wish to
+ * do a combo ref+lock sequence.
+ *
+ * These functions are MANDATORY for any code chain accessing a vnode
+ * whos activation state is not known.
+ *
+ * vget() can be called with LK_NOWAIT and will return EBUSY if the
+ * lock cannot be immediately acquired.
+ *
+ * vget()/vput() are used when reactivation is desired.
+ *
+ * vx_get() and vx_put() are used when reactivation is not desired.
+ */
+int
+vget(struct vnode *vp, int flags)
+{
+	panic("vget");
+
+}
+
+/*
+ * Remove an auxiliary reference from the vnode.
+ *
+ * vdrop needs to check for a VCACHE->VFREE transition to catch cases
+ * where a vnode is held past its reclamation.  We use v_spin to
+ * interlock VCACHED -> !VCACHED transitions.
+ *
+ * MPSAFE
+ */
+void
+vdrop(struct vnode *vp)
+{
+	panic("vdrop");
+}
+
+int	nvtruncbuf (struct vnode *vp, off_t length, int blksize, int boff,int trivial)
+{
+	panic("nvtruncbuf");
+}
+
+/*
+ * Allocate a new vnode and associate it with a tag, mount point, and
+ * operations vector.
+ *
+ * A VX locked and refd vnode is returned.  The caller should setup the
+ * remaining fields and vx_put() or, if he wishes to leave a vref,
+ * vx_unlock() the vnode.
+ */
+int
+getnewvnode(enum vtagtype tag, struct mount *mp, struct vnode **vpp, int lktimeout, int lkflags)
+{
+	panic("gennewvnode");
+
+	return (0);
+}
+
+/*
+ * Relase a VX lock that also held a ref on the vnode.
+ *
+ * vx_put needs to check for a VCACHED->VFREE transition to catch the
+ * case where e.g. vnlru issues a vgone*().
+ *
+ * MPSAFE
+ */
+void
+vx_put(struct vnode *vp)
+{
+	panic("vx_put");
+}
+
+/*
+ * Add a vnode to the alias list hung off the cdev_t.  We only associate
+ * the device number with the vnode.  The actual device is not associated
+ * until the vnode is opened (usually in spec_open()), and will be 
+ * disassociated on last close.
+ */
+void
+addaliasu(struct vnode *nvp, int x, int y)
+{
+	panic("addaliasu");
+}
+
+static inline
+void
+_vsetflags(struct vnode *vp, int flags)
+{
+	panic("_vsetflags");
+	//atomic_set_int(&vp->v_flag, flags);
+}
+
+void
+vsetflags(struct vnode *vp, int flags)
+{
+	_vsetflags(vp, flags);
+}
+
+/*
+ * Initialize VMIO for a vnode.  This routine MUST be called before a
+ * VFS can issue buffer cache ops on a vnode.  It is typically called
+ * when a vnode is initialized from its inode.
+ */
+int
+vinitvmio(struct vnode *vp, off_t filesize, int blksize, int boff)
+{
+	panic("vinitvmio");
+}
+
+void
+vhold_interlocked(struct vnode *vp)
+{
+	panic("vhold_interlocked");
+	//atomic_add_int(&vp->v_auxrefs, 1);
+}
+
+/*
+ * This helper function may be used by VFSs to implement UNIX initial
+ * ownership semantics when creating new objects inside directories.
+ */
+uid_t vop_helper_create_uid(struct mount *mp, mode_t dmode, uid_t duid,struct ucred *cred, unsigned short *modep)
+{
+	panic("vop_helper_create_uid");
+/*
+#ifdef SUIDDIR
+	if ((mp->mnt_flag & MNT_SUIDDIR) && (dmode & S_ISUID) &&
+	    duid != cred->cr_uid && duid) {
+		*modep &= ~07111;
+		return(duid);
+	}
+#endif
+	return(cred->cr_uid);
+*/
+}
+
+/*
+ * This yield is designed for kernel threads with a user context.
+ *
+ * The kernel acting on behalf of the user is potentially cpu-bound,
+ * this function will efficiently allow other threads to run and also
+ * switch to other processes by releasing.
+ *
+ * The lwkt_user_yield() function is designed to have very low overhead
+ * if no yield is determined to be needed.
+ */
+void
+lwkt_user_yield(void)
+{
+	panic("lwkt_user_yield");
+}
+
+/*
+ * Calculate the total number of references to a special device.  This
+ * routine may only be called for VBLK and VCHR vnodes since v_rdev is
+ * an overloaded field.  Since udev2dev can now return NULL, we have
+ * to check for a NULL v_rdev.
+ */
+int
+count_dev( unsigned long long  dev)
+{
+	panic("count_dev");
+/*
+        int count = 0;
+        struct vnode *vp;
+        if (SLIST_FIRST(&dev->si_hlist)) {
+                lwkt_gettoken(&spechash_token);
+                SLIST_FOREACH(vp, &dev->si_hlist, v_cdevnext) {
+                        count += vp->v_opencount;
+                }
+                lwkt_reltoken(&spechash_token);
+        }
+        return(count);
+*/
+
+}
+
+int
+vcount(struct vnode *vp)
+{
+	panic("vcount");
+/*
+	if (vp->v_rdev == NULL)
+		return(0);
+	return(count_dev(vp->v_rdev));
+*/
+}
+
+int
+vm_page_count_min(int donotcount)
+{
+	panic("vm_page_count_min");
+/*
+    return (vmstats.v_free_min + donotcount >
+	    (vmstats.v_free_count + vmstats.v_cache_count) ||
+	    vmstats.v_free_reserved > vmstats.v_free_count);
+*/
+}
+
+/*
+static void
+bremfree_locked(struct buf *bp)
+{
+	_bremfree(bp);
+}
+*/
+

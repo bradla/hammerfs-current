@@ -54,14 +54,14 @@ int64_t hammer_stats_disk_write;
 int64_t hammer_stats_inode_flushes;
 int64_t hammer_stats_commits;
 
-/* int hammer_count_dirtybufspace; */     /* global */
+long hammer_count_dirtybufspace;      /* global */
 atomic_t hammer_count_refedbufs;     /* global */
 int hammer_count_reservations;
-/* int hammer_count_io_running_read;
-int hammer_count_io_running_write;
-*/
+long hammer_count_io_running_read;
+long hammer_count_io_running_write;
+
 atomic_t hammer_count_io_locked;
-/* int hammer_limit_dirtybufspace;*/     /* per-mount */
+int64_t hammer_limit_dirtybufspace;     /* per-mount */
 int hammer_limit_recs;          /* as a whole XXX */
 int hammer_autoflush = 2000;        /* auto flush */
 int hammer_bio_count;
@@ -70,6 +70,19 @@ int hammer_verify_data = 1;
 int hammer_write_mode;
 int64_t hammer_contention_count;
 int64_t hammer_zone_limit;
+int hammer_count_reclaims;
+int hammer_btree_full_undo;
+int bootverbose;
+int64_t hammer_stats_undo;
+int hammer_limit_reclaims;
+int64_t hammer_live_dedup_device_bcmps;
+int64_t hammer_stats_btree_root_iterations;
+int hammer_live_dedup;
+int64_t hammer_stats_redo;
+const char *panicstr;        /* panic message */
+int hammer_live_dedup_cache_size;
+int hammer_double_buffer;
+int hammer_tdmux_ticks;
 
 static int hammerfs_install_volume(struct hammer_mount *hmp,
 					struct super_block *sb);
