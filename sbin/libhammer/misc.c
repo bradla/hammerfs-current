@@ -62,7 +62,8 @@ libhammer_find_pfs_mount(int pfsid, uuid_t parentuuid, int ismaster)
 	retval = NULL;
 
 	/* Do not continue if there are no mounted filesystems */
-	mntsize = getfsstat(NULL, 0, MNT_NOWAIT);
+	/* XXX mntsize = getfsstat(NULL, 0, MNT_NOWAIT);
+*/
 	if (mntsize <= 0)
 		return retval;
 
@@ -73,8 +74,9 @@ libhammer_find_pfs_mount(int pfsid, uuid_t parentuuid, int ismaster)
 		exit(EXIT_FAILURE);
 	}
 
-	mntsize = getfsstat(mntbuf, (long)mntbufsize, MNT_NOWAIT);
+/* XXX	mntsize = getfsstat(mntbuf, (long)mntbufsize, MNT_NOWAIT);
 	curmount = mntsize - 1;
+*/
 
 	asprintf(&trailstr, ":%05d", pfsid);
 

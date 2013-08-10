@@ -53,4 +53,4 @@
 #include <fcntl.h>
 #include <assert.h>
 #include <err.h>
-#include "hammer_util.h"
+#include "../libhammer/hammer_util.h"

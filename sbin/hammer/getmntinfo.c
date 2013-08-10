@@ -33,34 +33,36 @@
  * @(#)getmntinfo.c	8.1 (Berkeley) 6/4/93
  */
 
-#include <sys/param.h>
-#include <sys/mount.h>
-#include <stdlib.h>
 #include "hammer.h"
+#include <mntent.h>
 
 /*
  * Return information about mounted filesystems.
  */
 int
-getmntinfo(struct statfs **mntbufp, int flags)
+getmntinfo(struct statfs *mntbufp, int flags)
 {
-	static struct statfs *mntbuf;
+	struct statfs mntbuf;
 	static int mntsize;
 	static int bufsize;
 
-	if (mntsize <= 0 && (mntsize = getfsstat(0, 0, MNT_NOWAIT)) < 0)
-		return (0);
-	if (bufsize > 0 && (mntsize = getfsstat(mntbuf, bufsize, flags)) < 0)
-		return (0);
-	while (bufsize <= mntsize * (int)sizeof(struct statfs)) {
-		if (mntbuf)
-			free(mntbuf);
-		bufsize = (mntsize + 1) * sizeof(struct statfs);
-		if ((mntbuf = (struct statfs *)malloc(bufsize)) == NULL)
-			return (0);
-		if ((mntsize = getfsstat(mntbuf, bufsize, flags)) < 0)
-			return (0);
-	}
-	*mntbufp = mntbuf;
-	return (mntsize);
+	FILE* mtab = setmntent("/etc/mtab", "r");
+  	struct mntent* m;
+  	struct mntent mnt;
+	char strings[4096];
+  	int cnt=0;
+  
+  	while ((m = getmntent_r(mtab, &mnt, strings, sizeof(strings)))) {
+		/*    struct statfs fs; */
+    		if ((mnt.mnt_dir != NULL) && (statfs(mnt.mnt_dir, &mntbuf) == 0)) {
+      			cnt++;
+      			unsigned long long int size = mntbuf.f_blocks * mntbuf.f_bsize;
+      			unsigned long long int free = mntbuf.f_bfree * mntbuf.f_bsize;
+     			unsigned long long int avail = mntbuf.f_bavail * mntbuf.f_bsize;
+      			/* printf("%s %s size=%lld free=%lld avail=%lld\n", mnt.mnt_fsname, mnt.mnt_dir, size, free, avail); */
+    		}
+  	}
+
+	endmntent(mtab);
+	return(cnt);
 }

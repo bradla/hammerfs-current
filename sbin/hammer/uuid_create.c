@@ -44,5 +44,7 @@ uuid_create(uuid_t *u, uint32_t *status)
 	if (status)
 		*status = uuid_s_ok;
 
-	uuidgen(u, 1);
+
+	/* dfly uuidgen(u, 1); */
+	uuid_generate(u);
 }

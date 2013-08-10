@@ -7,7 +7,7 @@ SOURCES=crc32.c ondisk.c blockmap.c cache.c misc.c cycle.c \
 	cmd_config.c cmd_recover.c cmd_dedup.c \
 	uuid_create.c uuid_from_string.c uuid_name_lookup.c \
 	uuid_to_string.c uuid_compare.c uuid_is_nil.c uuid_create_nil.c \
-	sysctlnametomib.c humanize_unsigned.c getmntinfo.c hammer.c
+	sysctlnametomib.c humanize_unsigned.c getmntinfo.c getdevpath.c hammer.c
 MAN=	hammer.8
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=hammer

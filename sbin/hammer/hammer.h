@@ -40,8 +40,11 @@
 #include "../../dfly/sys/diskmbr.h"
 #include <sys/stat.h>
 #include <time.h>
-#include <sys/mount.h>
 #include <sys/wait.h>
+/* #ifdef HAVE_GETMNTINFO */
+#include <paths.h>
+#include <sys/param.h>
+#include <sys/mount.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,6 +66,10 @@
 
 #include "../libhammer/libhammer.h"
 
+
+#define GETDEVPATH_RAWDEV       0x0001
+#define _PATH_DEVTAB_PATHS \
+        "/usr/local/etc:/etc:/etc/defaults"
 
 #define SIGINFO            29
 /*
