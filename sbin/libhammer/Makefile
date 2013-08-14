@@ -5,8 +5,12 @@ CC = gcc
 CFLAGS = -Wall -fPIC
 utilObjs = crc32.o info.o misc.o
 
+all:  libhammer.a
+
 libhammer.a: $(utilObjs)
 	ar rc $@ $(utilObjs)
 	ranlib $@
-all: 
 	gcc -shared -Wl,-soname,libhammer.so -o libhammer.so   *.o
+
+clean:
+	rm *.so *.o *.a

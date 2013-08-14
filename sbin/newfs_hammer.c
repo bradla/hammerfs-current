@@ -93,7 +93,8 @@ main(int ac, char **av)
 	/*
 	 * Generate a filesystem id and lookup the filesystem type
 	 */
-	uuidgen(&Hammer_FSId, 1);
+	/* uuidgen(&Hammer_FSId, 1); */
+	uuid_generate(&Hammer_FSId);
 	uuid_name_lookup(&Hammer_FSType, "DragonFly HAMMER", &status);
 	if (status != uuid_s_ok) {
 		errx(1, "uuids file does not have the DragonFly "
@@ -164,6 +165,7 @@ main(int ac, char **av)
 	if (HammerVersion < 0) {
 		size_t olen = sizeof(HammerVersion);
 		HammerVersion = HAMMER_VOL_VERSION_DEFAULT;
+		/* XXX 
 		if (sysctlbyname("vfs.hammer.supported_version",
 				 &HammerVersion, &olen, NULL, 0) == 0) {
 			if (HammerVersion >= HAMMER_VOL_VERSION_WIP) {
@@ -182,6 +184,7 @@ main(int ac, char **av)
 				"Using version %d\n",
 				HAMMER_VOL_VERSION_DEFAULT);
 		}
+		*/
 	}
 
 	/*
@@ -223,7 +226,7 @@ main(int ac, char **av)
 			sprintf(sysctl_name, "kern.cam.da.%s.trim_enabled",
 			    dev_name);
 			errno=0;
-			sysctlbyname(sysctl_name, &trim_enabled, &olen, NULL, 0);
+			/* XXX sysctlbyname(sysctl_name, &trim_enabled, &olen, NULL, 0); */
 			if(errno == ENOENT) {
 				printf("Device:%s (%s) does not support the "
 				    "TRIM command\n", vol->name,sysctl_name);

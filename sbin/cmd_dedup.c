@@ -33,8 +33,7 @@
  */
 
 #include "hammer.h"
-#include "../libhammer/libutil.h"
-#include "../libhammer/sha2/sha2.h"
+#include "libhammer/libutil.h"
 
 #define DEDUP_BUF (64 * 1024)
 

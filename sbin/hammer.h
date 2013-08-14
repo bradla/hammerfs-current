@@ -36,8 +36,8 @@
 
 #include <stdint.h>
 #include <sys/types.h>
-#include "../../dfly/sys/diskslice.h"
-#include "../../dfly/sys/diskmbr.h"
+#include "../dfly/sys/diskslice.h"
+#include "../dfly/sys/diskmbr.h"
 #include <sys/stat.h>
 #include <time.h>
 #include <sys/wait.h>
@@ -59,12 +59,12 @@
 #include <ctype.h>
 #include <signal.h>
 #include <dirent.h>
-#include "../../dfly/sys/uuid.h"
+#include "../dfly/sys/uuid.h"
 
 #include "hammer_util.h"
-#include "../../hammer_ioctl.h"
+#include "../hammer_ioctl.h"
 
-#include "../libhammer/libhammer.h"
+#include "libhammer/libhammer.h"
 
 
 #define GETDEVPATH_RAWDEV       0x0001

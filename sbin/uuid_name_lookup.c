@@ -39,7 +39,7 @@
 
 #include "hammer.h"
 #include <sys/types.h>
-#include "../../dfly/sys/tree.h"
+#include "../dfly/sys/tree.h"
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>

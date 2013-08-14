@@ -45,7 +45,7 @@
 #include "../../dfly/sys/uuid.h"
 
 #include "libhammer.h"
-#include "../hammer/hammer.h"
+#include "../hammer.h"
 
 char *
 libhammer_find_pfs_mount(int pfsid, uuid_t parentuuid, int ismaster)

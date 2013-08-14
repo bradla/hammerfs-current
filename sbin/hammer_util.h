@@ -33,11 +33,11 @@
  */
 
 #include <sys/types.h>
-#include "../../dfly/sys/tree.h"
+#include "../dfly/sys/tree.h"
 #include <sys/queue.h>
 
-#include "../../hammer_disk.h"
-#include "../../dfly/sys/uuid.h"
+#include "../hammer_disk.h"
+#include "../dfly/sys/uuid.h"
 
 /*
  * Cache management - so the user code can keep its memory use under control
@@ -100,8 +100,7 @@ struct buffer_info {
 #define HAMMER_BUFINFO_READAHEAD	0x0001
 
 extern uuid_t Hammer_FSType;
-/* exterm uuid_t Hammer_FSId;
-*/
+extern uuid_t Hammer_FSId;
 extern int64_t BootAreaSize;
 extern int64_t MemAreaSize;
 extern int64_t UndoBufferSize;
@@ -160,8 +159,7 @@ void hammer_cache_del(struct cache_info *cache);
 void hammer_cache_used(struct cache_info *cache);
 void hammer_cache_flush(void);
 
-/*void score_printf(size_t i, size_t w, const char *ctl, ...) __printflike(3, 4);
+void score_printf(size_t i, size_t w, const char *ctl, ...); // __printflike(3, 4);
 
-void panic(const char *ctl, ...) __printflike(1, 2);
-*/
+void panic(const char *ctl, ...); // __printflike(1, 2);
 

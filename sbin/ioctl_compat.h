@@ -43,7 +43,7 @@
 #ifndef _SYS_IOCTL_COMPAT_H_
 #define	_SYS_IOCTL_COMPAT_H_
 
-#include "ioccom.h"
+#include "libhammer/ioccom.h"
 /*
 #include <sys/ttychars.h>
 #include <sys/ttydev.h>

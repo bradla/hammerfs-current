@@ -33,7 +33,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "../libhammer/libutil.h"
+#include "libhammer/libutil.h"
 
 /*
  * snprintf() `bytes' into `buf', reformatting it so that the number,

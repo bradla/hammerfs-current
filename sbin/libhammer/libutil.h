@@ -40,6 +40,7 @@
 #define	_LIBUTIL_H_
 
 #include <sys/types.h>
+#include <openssl/sha.h>
 
 #ifdef _PWD_H_
 #define	_PWSCAN_MASTER	0x01

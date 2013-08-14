@@ -98,7 +98,7 @@ hammer_init_cursor(hammer_transaction_t trans, hammer_cursor_t cursor,
 		/*
 		 * Ensure rticks and xticks are stable
 		 */
-		/* XXX cpu_ccfence(); */
+		cpu_ccfence();
 		if (rticks < xticks) {
 			if (hammer_debug_general & 0x0004)
 				kprintf("rt %3u, xt %3u, tt %3u\n",
